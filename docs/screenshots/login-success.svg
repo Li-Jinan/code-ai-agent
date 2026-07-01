@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720" role="img" aria-label="Login success screenshot placeholder">
+  <rect width="1280" height="720" fill="#f7f9fc"/>
+  <rect x="40" y="40" width="1200" height="72" rx="12" fill="#ffffff" stroke="#d9e2ef"/>
+  <circle cx="1188" cy="76" r="18" fill="#bfbfbf"/>
+  <rect x="80" y="156" width="1120" height="500" rx="18" fill="#ffffff" stroke="#d9e2ef"/>
+  <circle cx="640" cy="286" r="54" fill="#52c41a"/>
+  <path d="M614 286l18 18 38-48" fill="none" stroke="#ffffff" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="480" y="380" width="320" height="30" rx="8" fill="#1f2937"/>
+  <rect x="420" y="434" width="440" height="20" rx="6" fill="#cbd5e1"/>
+  <text x="640" y="570" text-anchor="middle" font-family="Arial, sans-serif" font-size="30" fill="#1677ff">Login Success Screenshot</text>
+</svg>
