@@ -1,4 +1,4 @@
-# AI Agent 智能体对话应用开发
+# AI 代码生成与智能体应用平台
 
 > 基于 Spring AI + Spring Boot + RAG + 工具调用 + MCP 构建的多模型 AI 智能体应用。系统支持 ReAct 自主思考、多轮对话隔离、记忆持久化、RAG 知识库检索、结构化输出、Prompt 优化、工具调用和 MCP 服务接入。
 
