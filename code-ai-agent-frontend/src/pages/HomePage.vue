@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { computed, ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { useLoginUserStore } from '@/stores/loginUser'
@@ -13,6 +13,7 @@ const loginUserStore = useLoginUserStore()
 // 用户提示词
 const userPrompt = ref('')
 const creating = ref(false)
+const isLoggedIn = computed(() => Boolean(loginUserStore.loginUser.id))
 
 // 我的应用数据
 const myApps = ref<API.AppVO[]>([])
@@ -30,9 +31,53 @@ const featuredAppsPage = reactive({
   total: 0,
 })
 
+const showcaseCases = [
+  {
+    title: '个人博客网站',
+    type: '内容创作',
+    description: '文章列表、Markdown 详情、分类标签、搜索和个人简介，适合沉淀技术文章和作品记录。',
+    prompt:
+      '创建一个现代化的个人博客网站，包含文章列表、详情页、分类标签、搜索功能、评论系统和个人简介页面。采用简洁的设计风格，支持响应式布局，文章支持Markdown格式，首页展示最新文章和热门推荐。',
+    accent: 'blog',
+    tags: ['Markdown', '搜索', '评论'],
+  },
+  {
+    title: '企业官网',
+    type: '品牌展示',
+    description: '公司介绍、产品服务、新闻资讯、客户案例和联系方式，适合包装项目与企业形象。',
+    prompt:
+      '设计一个专业的企业官网，包含公司介绍、产品服务展示、新闻资讯、联系我们等页面。采用商务风格的设计，包含轮播图、产品展示卡片、团队介绍、客户案例展示，支持多语言切换和在线客服功能。',
+    accent: 'business',
+    tags: ['服务展示', '客户案例', '联系表单'],
+  },
+  {
+    title: '在线商城',
+    type: '交易体验',
+    description: '商品展示、购物车、订单管理和用户评价，适合展示完整业务闭环和前端交互能力。',
+    prompt:
+      '构建一个功能完整的在线商城，包含商品展示、购物车、用户注册登录、订单管理、支付结算等功能。设计现代化的商品卡片布局，支持商品搜索筛选、用户评价、优惠券系统和会员积分功能。',
+    accent: 'shop',
+    tags: ['商品筛选', '购物车', '订单'],
+  },
+  {
+    title: '作品展示网站',
+    type: '个人作品集',
+    description: '作品画廊、项目详情、个人简历和联系方式，适合设计师、摄影师或开发者作品集。',
+    prompt:
+      '制作一个精美的作品展示网站，适合设计师、摄影师、艺术家等创作者。包含作品画廊、项目详情页、个人简历、联系方式等模块。采用瀑布流或网格布局展示作品，支持图片放大预览和作品分类筛选。',
+    accent: 'portfolio',
+    tags: ['画廊', '项目详情', '简历'],
+  },
+]
+
 // 设置提示词
 const setPrompt = (prompt: string) => {
   userPrompt.value = prompt
+}
+
+const useShowcaseCase = (item: (typeof showcaseCases)[number]) => {
+  setPrompt(item.prompt)
+  window.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
 // 优化提示词功能已移除
@@ -44,7 +89,7 @@ const createApp = async () => {
     return
   }
 
-  if (!loginUserStore.loginUser.id) {
+  if (!isLoggedIn.value) {
     message.warning('请先登录')
     await router.push('/user/login')
     return
@@ -74,7 +119,7 @@ const createApp = async () => {
 
 // 加载我的应用
 const loadMyApps = async () => {
-  if (!loginUserStore.loginUser.id) {
+  if (!isLoggedIn.value) {
     return
   }
 
@@ -224,7 +269,7 @@ onMounted(() => {
       </div>
 
       <!-- 我的作品 -->
-      <div class="section">
+      <div v-if="isLoggedIn" class="section">
         <h2 class="section-title">我的作品</h2>
         <div class="app-grid">
           <AppCard
@@ -247,8 +292,49 @@ onMounted(() => {
         </div>
       </div>
 
+      <div v-else class="section showcase-section">
+        <div class="section-heading-row">
+          <h2 class="section-title">可生成案例</h2>
+          <RouterLink class="section-action" to="/user/login">登录后开始创建</RouterLink>
+        </div>
+        <div class="showcase-grid">
+          <button
+            v-for="item in showcaseCases"
+            :key="item.title"
+            type="button"
+            class="showcase-card"
+            @click="useShowcaseCase(item)"
+          >
+            <div class="showcase-preview" :class="`showcase-preview--${item.accent}`">
+              <div class="preview-browser">
+                <span></span>
+                <span></span>
+                <span></span>
+              </div>
+              <div class="preview-body">
+                <div class="preview-line preview-line--wide"></div>
+                <div class="preview-line"></div>
+                <div class="preview-tiles">
+                  <i></i>
+                  <i></i>
+                  <i></i>
+                </div>
+              </div>
+            </div>
+            <div class="showcase-content">
+              <div class="showcase-meta">{{ item.type }}</div>
+              <h3>{{ item.title }}</h3>
+              <p>{{ item.description }}</p>
+              <div class="showcase-tags">
+                <span v-for="tag in item.tags" :key="tag">{{ tag }}</span>
+              </div>
+            </div>
+          </button>
+        </div>
+      </div>
+
       <!-- 精选案例 -->
-      <div class="section">
+      <div v-if="featuredApps.length > 0" class="section">
         <h2 class="section-title">精选案例</h2>
         <div class="featured-grid">
           <AppCard
@@ -465,14 +551,26 @@ onMounted(() => {
   margin-bottom: 60px;
 }
 
+.section-heading-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 28px;
+}
+
 .section-title {
   font-size: 30px;
   font-weight: 600;
-  margin-bottom: 28px;
+  margin: 0 0 28px;
   color: #173a28;
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+.section-heading-row .section-title {
+  margin-bottom: 0;
 }
 
 .section-title::before {
@@ -481,6 +579,147 @@ onMounted(() => {
   height: 28px;
   border-radius: 999px;
   background: #2f7d4b;
+}
+
+.section-action {
+  color: #2f7d4b;
+  font-weight: 600;
+}
+
+.showcase-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.showcase-card {
+  appearance: none;
+  border: 1px solid rgba(47, 125, 75, 0.14);
+  background: rgba(255, 255, 255, 0.94);
+  border-radius: 8px;
+  padding: 0;
+  overflow: hidden;
+  text-align: left;
+  box-shadow: 0 12px 30px rgba(23, 58, 40, 0.1);
+  cursor: pointer;
+  transition:
+    transform 0.2s,
+    box-shadow 0.2s,
+    border-color 0.2s;
+}
+
+.showcase-card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(47, 125, 75, 0.32);
+  box-shadow: 0 18px 40px rgba(23, 58, 40, 0.16);
+}
+
+.showcase-preview {
+  height: 150px;
+  padding: 16px;
+  background: linear-gradient(135deg, #e7f4ea 0%, #f8fbf8 100%);
+}
+
+.showcase-preview--business {
+  background: linear-gradient(135deg, #e7eef6 0%, #f8fbfc 100%);
+}
+
+.showcase-preview--shop {
+  background: linear-gradient(135deg, #f3eee3 0%, #fbfaf5 100%);
+}
+
+.showcase-preview--portfolio {
+  background: linear-gradient(135deg, #eeeaf5 0%, #fbf9fc 100%);
+}
+
+.preview-browser {
+  height: 22px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 10px;
+  border-radius: 8px 8px 0 0;
+  background: rgba(255, 255, 255, 0.86);
+  border: 1px solid rgba(23, 58, 40, 0.08);
+  border-bottom: none;
+}
+
+.preview-browser span {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #7eb88a;
+}
+
+.preview-body {
+  height: 96px;
+  padding: 14px;
+  border-radius: 0 0 8px 8px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(23, 58, 40, 0.08);
+}
+
+.preview-line {
+  height: 10px;
+  width: 56%;
+  border-radius: 999px;
+  background: rgba(47, 125, 75, 0.2);
+  margin-bottom: 10px;
+}
+
+.preview-line--wide {
+  width: 82%;
+}
+
+.preview-tiles {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.preview-tiles i {
+  height: 26px;
+  border-radius: 6px;
+  background: rgba(47, 125, 75, 0.16);
+}
+
+.showcase-content {
+  padding: 16px;
+}
+
+.showcase-meta {
+  color: #2f7d4b;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.showcase-content h3 {
+  margin: 0 0 8px;
+  color: #173a28;
+  font-size: 18px;
+}
+
+.showcase-content p {
+  min-height: 66px;
+  margin: 0 0 14px;
+  color: #617267;
+  line-height: 1.55;
+}
+
+.showcase-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.showcase-tags span {
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: #f2f7f3;
+  color: #31533e;
+  font-size: 12px;
 }
 
 /* 我的作品网格 */
@@ -526,8 +765,14 @@ onMounted(() => {
   }
 
   .app-grid,
-  .featured-grid {
+  .featured-grid,
+  .showcase-grid {
     grid-template-columns: 1fr;
+  }
+
+  .section-heading-row {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .quick-actions {
