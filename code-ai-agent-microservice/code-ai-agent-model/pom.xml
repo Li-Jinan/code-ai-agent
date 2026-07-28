@@ -19,6 +19,12 @@
 
     <dependencies>
         <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <version>1.18.38</version>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
             <groupId>com.jinan</groupId>
             <artifactId>code-ai-agent-common</artifactId>
             <version>1.0-SNAPSHOT</version>

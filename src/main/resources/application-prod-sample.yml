@@ -14,6 +14,19 @@ spring:
       database: 0
       password: <your-redis-password>
       ttl: 3600
+  # mail
+  mail:
+    host: ${MAIL_HOST:smtp.qq.com}
+    port: ${MAIL_PORT:465}
+    username: ${MAIL_USERNAME:<your-mail-address>}
+    password: ${MAIL_PASSWORD:<your-mail-auth-code>}
+    protocol: smtps
+    properties:
+      mail:
+        smtp:
+          auth: true
+          ssl:
+            enable: true
 server:
   port: 8123
   servlet:

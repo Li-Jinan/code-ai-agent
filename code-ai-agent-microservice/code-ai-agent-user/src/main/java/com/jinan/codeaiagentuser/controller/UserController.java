@@ -73,6 +73,31 @@ public class UserController {
         return ResultUtils.success(loginUserVO);
     }
 
+    /**
+     * 发送邮箱登录验证码
+     */
+    @PostMapping("/email/code")
+    public BaseResponse<Boolean> sendEmailLoginCode(@RequestBody UserEmailCodeRequest userEmailCodeRequest) {
+        ThrowUtils.throwIf(userEmailCodeRequest == null, ErrorCode.PARAMS_ERROR);
+        boolean result = userService.sendEmailLoginCode(userEmailCodeRequest.getUserEmail());
+        return ResultUtils.success(result);
+    }
+
+    /**
+     * 邮箱验证码登录
+     */
+    @PostMapping("/login/email")
+    public BaseResponse<LoginUserVO> userEmailCodeLogin(@RequestBody UserEmailLoginRequest userEmailLoginRequest,
+                                                        HttpServletRequest request) {
+        ThrowUtils.throwIf(userEmailLoginRequest == null, ErrorCode.PARAMS_ERROR);
+        LoginUserVO loginUserVO = userService.userEmailCodeLogin(
+                userEmailLoginRequest.getUserEmail(),
+                userEmailLoginRequest.getEmailCode(),
+                request
+        );
+        return ResultUtils.success(loginUserVO);
+    }
+
     @GetMapping("/get/login")
     public BaseResponse<LoginUserVO> getLoginUser(HttpServletRequest request) {
         User loginUser = userService.getLoginUser(request);

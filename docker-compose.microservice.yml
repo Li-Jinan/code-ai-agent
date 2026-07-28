@@ -1,0 +1,147 @@
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: code-ai-agent-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: code_ai_agent
+      TZ: Asia/Shanghai
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-time-zone=+08:00
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./docker/mysql/init:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "${MYSQL_PUBLIC_PORT:-3306}:3306"
+
+  redis:
+    image: redis:7.4-alpine
+    container_name: code-ai-agent-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis-data:/data
+    ports:
+      - "${REDIS_PUBLIC_PORT:-6379}:6379"
+
+  nacos:
+    image: nacos/nacos-server:v2.4.3
+    container_name: code-ai-agent-nacos
+    restart: unless-stopped
+    environment:
+      MODE: standalone
+      NACOS_AUTH_ENABLE: "false"
+      JVM_XMS: 256m
+      JVM_XMX: 512m
+      JVM_XMN: 128m
+    ports:
+      - "${NACOS_PUBLIC_PORT:-8848}:8848"
+      - "9848:9848"
+
+  user-service:
+    build:
+      context: ./code-ai-agent-microservice
+      dockerfile: Dockerfile
+      args:
+        MODULE: code-ai-agent-user
+    container_name: code-ai-agent-user
+    restart: unless-stopped
+    depends_on:
+      - mysql
+      - redis
+      - nacos
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/code_ai_agent?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD}
+      DUBBO_REGISTRY_ADDRESS: nacos://nacos:8848
+      DUBBO_PROTOCOL_HOST: user-service
+    ports:
+      - "${USER_SERVICE_PUBLIC_PORT:-8124}:8124"
+
+  screenshot-service:
+    build:
+      context: ./code-ai-agent-microservice
+      dockerfile: Dockerfile
+      args:
+        MODULE: code-ai-agent-screenshot
+    container_name: code-ai-agent-screenshot
+    restart: unless-stopped
+    depends_on:
+      - nacos
+    environment:
+      DUBBO_REGISTRY_ADDRESS: nacos://nacos:8848
+      DUBBO_PROTOCOL_HOST: screenshot-service
+      COS_CLIENT_HOST: ${COS_CLIENT_HOST:-}
+      COS_CLIENT_SECRETID: ${COS_CLIENT_SECRETID:-}
+      COS_CLIENT_SECRETKEY: ${COS_CLIENT_SECRETKEY:-}
+      COS_CLIENT_REGION: ${COS_CLIENT_REGION:-}
+      COS_CLIENT_BUCKET: ${COS_CLIENT_BUCKET:-}
+    ports:
+      - "${SCREENSHOT_SERVICE_PUBLIC_PORT:-8127}:8127"
+
+  app-service:
+    build:
+      context: ./code-ai-agent-microservice
+      dockerfile: Dockerfile
+      args:
+        MODULE: code-ai-agent-app
+    container_name: code-ai-agent-app
+    restart: unless-stopped
+    depends_on:
+      - mysql
+      - redis
+      - nacos
+      - user-service
+      - screenshot-service
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/code_ai_agent?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD}
+      DUBBO_REGISTRY_ADDRESS: nacos://nacos:8848
+      DUBBO_PROTOCOL_HOST: app-service
+      CODE_DEPLOY_HOST: ${PUBLIC_BASE_URL}
+      LANGCHAIN4J_OPEN_AI_CHAT_MODEL_API_KEY: ${DEEPSEEK_API_KEY}
+      LANGCHAIN4J_OPEN_AI_STREAMING_CHAT_MODEL_API_KEY: ${DEEPSEEK_API_KEY}
+      LANGCHAIN4J_OPEN_AI_REASONING_STREAMING_CHAT_MODEL_API_KEY: ${DEEPSEEK_API_KEY}
+      LANGCHAIN4J_OPEN_AI_ROUTING_CHAT_MODEL_API_KEY: ${DASHSCOPE_API_KEY}
+      DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY}
+      PEXELS_API_KEY: ${PEXELS_API_KEY:-}
+    volumes:
+      - app-code-output:/app/tmp/code_output
+      - app-code-deploy:/app/tmp/code_deploy
+    ports:
+      - "${APP_SERVICE_PUBLIC_PORT:-8125}:8125"
+
+  frontend:
+    build:
+      context: ./code-ai-agent-frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: /api
+        VITE_DEPLOY_DOMAIN: ${PUBLIC_BASE_URL}
+    container_name: code-ai-agent-frontend
+    restart: unless-stopped
+    depends_on:
+      - app-service
+      - user-service
+    volumes:
+      - app-code-deploy:/usr/share/nginx/deploy:ro
+    ports:
+      - "${HTTP_PUBLIC_PORT:-80}:80"
+
+volumes:
+  mysql-data:
+  redis-data:
+  app-code-output:
+  app-code-deploy:
+

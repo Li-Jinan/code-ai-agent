@@ -91,6 +91,36 @@ export async function userLogin(body: API.UserLoginRequest, options?: { [key: st
   })
 }
 
+/** 邮箱验证码登录 POST /user/login/email */
+export async function userEmailCodeLogin(
+  body: API.UserEmailLoginRequest,
+  options?: { [key: string]: any },
+) {
+  return request<API.BaseResponseLoginUserVO>('/user/login/email', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    data: body,
+    ...(options || {}),
+  })
+}
+
+/** 发送邮箱登录验证码 POST /user/email/code */
+export async function sendEmailLoginCode(
+  body: API.UserEmailCodeRequest,
+  options?: { [key: string]: any },
+) {
+  return request<API.BaseResponseBoolean>('/user/email/code', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    data: body,
+    ...(options || {}),
+  })
+}
+
 /** 此处后端没有提供注释 POST /user/logout */
 export async function userLogout(options?: { [key: string]: any }) {
   return request<API.BaseResponseBoolean>('/user/logout', {

@@ -20,6 +20,19 @@ spring:
       database: 0
       password: ${REDIS_PASSWORD:}
       ttl: 3600 # 缓存过期时间（秒）
+  # mail
+  mail:
+    host: ${MAIL_HOST:smtp.qq.com}
+    port: ${MAIL_PORT:465}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    protocol: smtps
+    properties:
+      mail:
+        smtp:
+          auth: true
+          ssl:
+            enable: true
   profiles:
     active: local
 server:

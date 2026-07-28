@@ -14,11 +14,17 @@ import com.jinan.codeaiagent.model.enums.UserRoleEnum;
 import com.jinan.codeaiagent.model.vo.LoginUserVO;
 import com.jinan.codeaiagent.model.vo.UserVO;
 import com.jinan.codeaiagent.user.service.UserService;
+import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.mail.SimpleMailMessage;
+import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
 import org.springframework.util.DigestUtils;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -35,6 +41,19 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     private static final String EMAIL_PATTERN = "^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$";
     private static final String DEFAULT_USER_AVATAR = "/userAvatar.svg";
     private static final String DEFAULT_USER_NAME = "新用户";
+    private static final String EMAIL_CODE_KEY_PREFIX = "code-ai-agent:user:email-login:";
+    private static final String EMAIL_CODE_LIMIT_KEY_PREFIX = "code-ai-agent:user:email-login-limit:";
+    private static final Duration EMAIL_CODE_TTL = Duration.ofMinutes(5);
+    private static final Duration EMAIL_CODE_SEND_INTERVAL = Duration.ofSeconds(60);
+
+    @Resource
+    private StringRedisTemplate stringRedisTemplate;
+
+    @Resource
+    private JavaMailSender javaMailSender;
+
+    @Value("${spring.mail.username:}")
+    private String mailFrom;
 
     @Override
     public long userRegister(String userAccount, String userEmail, String userName, String userPassword, String checkPassword) {
@@ -123,6 +142,63 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         // 4. 如果用户存在，记录用户的登录态
         request.getSession().setAttribute(USER_LOGIN_STATE, user);
         // 5. 返回脱敏的用户信息
+        return this.getLoginUserVO(user);
+    }
+
+    @Override
+    public boolean sendEmailLoginCode(String userEmail) {
+        if (!isEmail(userEmail)) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "邮箱格式不正确");
+        }
+        if (StrUtil.isBlank(mailFrom)) {
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "邮件发送账号未配置");
+        }
+        QueryWrapper queryWrapper = QueryWrapper.create().eq("userEmail", userEmail);
+        User user = this.mapper.selectOneByQuery(queryWrapper);
+        if (user == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "邮箱未注册");
+        }
+        String limitKey = EMAIL_CODE_LIMIT_KEY_PREFIX + userEmail;
+        Boolean canSend = stringRedisTemplate.opsForValue()
+                .setIfAbsent(limitKey, "1", EMAIL_CODE_SEND_INTERVAL);
+        if (Boolean.FALSE.equals(canSend)) {
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "验证码发送太频繁，请稍后再试");
+        }
+        String code = String.valueOf((int) ((Math.random() * 9 + 1) * 100000));
+        String codeKey = EMAIL_CODE_KEY_PREFIX + userEmail;
+        stringRedisTemplate.opsForValue().set(codeKey, code, EMAIL_CODE_TTL);
+        try {
+            SimpleMailMessage message = new SimpleMailMessage();
+            message.setFrom(mailFrom);
+            message.setTo(userEmail);
+            message.setSubject("今安 AI 应用登录验证码");
+            message.setText("你的登录验证码是：" + code + "，5 分钟内有效。若非本人操作，请忽略本邮件。");
+            javaMailSender.send(message);
+            return true;
+        } catch (Exception e) {
+            stringRedisTemplate.delete(codeKey);
+            stringRedisTemplate.delete(limitKey);
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "验证码发送失败，请检查邮箱配置");
+        }
+    }
+
+    @Override
+    public LoginUserVO userEmailCodeLogin(String userEmail, String emailCode, HttpServletRequest request) {
+        if (!isEmail(userEmail) || StrUtil.isBlank(emailCode)) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "参数错误");
+        }
+        String codeKey = EMAIL_CODE_KEY_PREFIX + userEmail;
+        String cachedCode = stringRedisTemplate.opsForValue().get(codeKey);
+        if (StrUtil.isBlank(cachedCode) || !cachedCode.equals(emailCode.trim())) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "验证码错误或已过期");
+        }
+        QueryWrapper queryWrapper = QueryWrapper.create().eq("userEmail", userEmail);
+        User user = this.mapper.selectOneByQuery(queryWrapper);
+        if (user == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "用户不存在");
+        }
+        stringRedisTemplate.delete(codeKey);
+        request.getSession().setAttribute(USER_LOGIN_STATE, user);
         return this.getLoginUserVO(user);
     }
 

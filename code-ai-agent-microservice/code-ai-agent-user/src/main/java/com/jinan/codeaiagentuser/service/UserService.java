@@ -46,6 +46,24 @@ public interface UserService extends IService<User> {
     LoginUserVO userLogin(String userAccount, String userPassword, HttpServletRequest request);
 
     /**
+     * 发送邮箱登录验证码
+     *
+     * @param userEmail 用户邮箱
+     * @return 是否发送成功
+     */
+    boolean sendEmailLoginCode(String userEmail);
+
+    /**
+     * 邮箱验证码登录
+     *
+     * @param userEmail 用户邮箱
+     * @param emailCode 邮箱验证码
+     * @param request
+     * @return 脱敏后的用户信息
+     */
+    LoginUserVO userEmailCodeLogin(String userEmail, String emailCode, HttpServletRequest request);
+
+    /**
      * 获取当前登录用户
      *
      * @param request

@@ -237,6 +237,15 @@ declare namespace API {
     userRole?: string
   }
 
+  type UserEmailCodeRequest = {
+    userEmail?: string
+  }
+
+  type UserEmailLoginRequest = {
+    userEmail?: string
+    emailCode?: string
+  }
+
   type UserLoginRequest = {
     userAccount?: string
     userPassword?: string
