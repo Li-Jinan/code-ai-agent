@@ -39,6 +39,7 @@ const showcaseCases = [
     prompt:
       '创建一个现代化的个人博客网站，包含文章列表、详情页、分类标签、搜索功能、评论系统和个人简介页面。采用简洁的设计风格，支持响应式布局，文章支持Markdown格式，首页展示最新文章和热门推荐。',
     accent: 'blog',
+    image: '/showcases/blog.png',
     tags: ['Markdown', '搜索', '评论'],
   },
   {
@@ -48,6 +49,7 @@ const showcaseCases = [
     prompt:
       '设计一个专业的企业官网，包含公司介绍、产品服务展示、新闻资讯、联系我们等页面。采用商务风格的设计，包含轮播图、产品展示卡片、团队介绍、客户案例展示，支持多语言切换和在线客服功能。',
     accent: 'business',
+    image: '/showcases/business.png',
     tags: ['服务展示', '客户案例', '联系表单'],
   },
   {
@@ -57,6 +59,7 @@ const showcaseCases = [
     prompt:
       '构建一个功能完整的在线商城，包含商品展示、购物车、用户注册登录、订单管理、支付结算等功能。设计现代化的商品卡片布局，支持商品搜索筛选、用户评价、优惠券系统和会员积分功能。',
     accent: 'shop',
+    image: '/showcases/shop.png',
     tags: ['商品筛选', '购物车', '订单'],
   },
   {
@@ -66,6 +69,7 @@ const showcaseCases = [
     prompt:
       '制作一个精美的作品展示网站，适合设计师、摄影师、艺术家等创作者。包含作品画廊、项目详情页、个人简历、联系方式等模块。采用瀑布流或网格布局展示作品，支持图片放大预览和作品分类筛选。',
     accent: 'portfolio',
+    image: '/showcases/portfolio.png',
     tags: ['画廊', '项目详情', '简历'],
   },
 ]
@@ -324,67 +328,7 @@ onMounted(() => {
             @click="openShowcaseDetail(item)"
           >
             <div class="showcase-preview" :class="`showcase-preview--${item.accent}`">
-              <div class="preview-browser">
-                <span></span>
-                <span></span>
-                <span></span>
-              </div>
-              <div class="preview-body" :class="`preview-body--${item.accent}`">
-                <template v-if="item.accent === 'blog'">
-                  <div class="preview-nav">
-                    <span>Notes</span>
-                    <i></i>
-                  </div>
-                  <div class="preview-blog-hero">
-                    <strong>技术札记</strong>
-                    <small>AI / Vue / Spring Boot</small>
-                  </div>
-                  <div class="preview-posts">
-                    <b></b>
-                    <b></b>
-                    <b></b>
-                  </div>
-                </template>
-                <template v-else-if="item.accent === 'business'">
-                  <div class="preview-business-hero">
-                    <strong>Build Future</strong>
-                    <span></span>
-                  </div>
-                  <div class="preview-metrics">
-                    <b>98%</b>
-                    <b>24h</b>
-                    <b>12+</b>
-                  </div>
-                  <div class="preview-service-row">
-                    <i></i>
-                    <i></i>
-                  </div>
-                </template>
-                <template v-else-if="item.accent === 'shop'">
-                  <div class="preview-shop-top">
-                    <strong>New Arrival</strong>
-                    <span>¥99</span>
-                  </div>
-                  <div class="preview-products">
-                    <b><i></i><em></em></b>
-                    <b><i></i><em></em></b>
-                    <b><i></i><em></em></b>
-                  </div>
-                </template>
-                <template v-else>
-                  <div class="preview-portfolio-hero">
-                    <strong>Portfolio</strong>
-                    <span></span>
-                  </div>
-                  <div class="preview-gallery">
-                    <b></b>
-                    <b></b>
-                    <b></b>
-                    <b></b>
-                    <b></b>
-                  </div>
-                </template>
-              </div>
+              <img :src="item.image" :alt="`${item.title}真实生成截图`" loading="lazy" />
             </div>
             <div class="showcase-content">
               <div class="showcase-meta">{{ item.type }}</div>
@@ -440,30 +384,8 @@ onMounted(() => {
       @ok="createFromShowcase"
     >
       <div v-if="selectedShowcase" class="showcase-modal">
-        <div class="showcase-modal-preview" :class="`showcase-preview--${selectedShowcase.accent}`">
-          <div class="modal-browser">
-            <span></span>
-            <span></span>
-            <span></span>
-            <strong>{{ selectedShowcase.title }}</strong>
-          </div>
-          <div class="modal-preview-body">
-            <aside>
-              <i></i>
-              <i></i>
-              <i></i>
-            </aside>
-            <main>
-              <div class="modal-hero-line"></div>
-              <div class="modal-copy-line"></div>
-              <div class="modal-copy-line modal-copy-line--short"></div>
-              <div class="modal-card-row">
-                <b></b>
-                <b></b>
-                <b></b>
-              </div>
-            </main>
-          </div>
+        <div class="showcase-modal-preview">
+          <img :src="selectedShowcase.image" :alt="`${selectedShowcase.title}真实生成截图`" />
         </div>
         <div class="showcase-modal-info">
           <div class="showcase-meta">{{ selectedShowcase.type }}</div>
@@ -475,7 +397,7 @@ onMounted(() => {
             class="showcase-modal-tip"
             type="info"
             show-icon
-            message="这是可生成效果示例，点击“使用这个模板”后会把提示词填入首页输入框。"
+            message="这是通过平台 AI 生成接口真实生成的页面截图，点击“使用这个模板”后会把提示词填入首页输入框。"
           />
         </div>
       </div>
@@ -742,6 +664,18 @@ onMounted(() => {
   background:
     radial-gradient(circle at 20% 18%, rgba(47, 125, 75, 0.18), transparent 30%),
     linear-gradient(135deg, #e7f4ea 0%, #f8fbf8 100%);
+}
+
+.showcase-preview img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 8px;
+  object-fit: cover;
+  object-position: top center;
+  background: #fff;
+  border: 1px solid rgba(23, 58, 40, 0.08);
+  box-shadow: 0 10px 24px rgba(23, 58, 40, 0.1);
 }
 
 .showcase-preview--business {
@@ -1064,9 +998,20 @@ onMounted(() => {
 
 .showcase-modal-preview {
   min-height: 300px;
-  padding: 18px;
+  padding: 0;
   border-radius: 8px;
   border: 1px solid rgba(47, 125, 75, 0.12);
+  overflow: hidden;
+  background: #fff;
+}
+
+.showcase-modal-preview img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 360px;
+  object-fit: cover;
+  object-position: top center;
 }
 
 .modal-browser {
