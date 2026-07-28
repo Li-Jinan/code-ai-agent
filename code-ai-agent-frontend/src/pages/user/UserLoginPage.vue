@@ -7,7 +7,7 @@
       class="login-mode"
       :options="[
         { label: '密码登录', value: 'password' },
-        { label: '验证码登录', value: 'emailCode' },
+        { label: '邮箱登录/注册', value: 'emailCode' },
       ]"
     />
     <a-form :model="loginFormModel" name="basic" autocomplete="off" @finish="handleSubmit">
@@ -58,11 +58,13 @@
         </a-input>
       </a-form-item>
       <div class="tips">
-        没有账号
+        密码登录需要先注册账号，邮箱验证码可直接登录或注册
         <RouterLink to="/user/register">去注册</RouterLink>
       </div>
       <a-form-item>
-        <a-button type="primary" html-type="submit" style="width: 100%">登录</a-button>
+        <a-button type="primary" html-type="submit" style="width: 100%" :loading="submitLoading">
+          {{ loginMode === 'emailCode' ? '登录 / 注册' : '登录' }}
+        </a-button>
       </a-form-item>
     </a-form>
   </div>
@@ -76,6 +78,7 @@ import { message } from 'ant-design-vue'
 
 const loginMode = ref<'password' | 'emailCode'>('password')
 const sendingCode = ref(false)
+const submitLoading = ref(false)
 const countdown = ref(0)
 let countdownTimer: number | undefined
 
@@ -94,12 +97,15 @@ const loginFormModel = computed(() => (loginMode.value === 'password' ? formStat
 const router = useRouter()
 const loginUserStore = useLoginUserStore()
 
-const finishLogin = async () => {
-  await loginUserStore.fetchLoginUser()
+const finishLogin = async (loginUser: API.LoginUserVO) => {
+  loginUserStore.setLoginUser(loginUser)
   message.success('登录成功')
-  router.push({
+  await router.push({
     path: '/',
     replace: true,
+  })
+  loginUserStore.fetchLoginUser().catch((error) => {
+    console.error('刷新登录用户失败：', error)
   })
 }
 
@@ -124,10 +130,10 @@ const sendCode = async () => {
   try {
     const res = await sendEmailLoginCode({ userEmail })
     if (res.data.code === 0) {
-      message.success('验证码已发送')
+      message.success('验证码已发送，未注册邮箱会自动创建账号')
       startCountdown()
     } else {
-      message.error('发送失败，' + res.data.message)
+      message.error(res.data.message || '发送失败，请稍后重试')
     }
   } catch (error) {
     console.error('发送验证码失败：', error)
@@ -142,18 +148,32 @@ const sendCode = async () => {
  * @param values
  */
 const handleSubmit = async () => {
-  const res =
-    loginMode.value === 'password'
-      ? await userLogin(formState)
-      : await userEmailCodeLogin({
-          userEmail: emailCodeForm.userEmail?.trim(),
-          emailCode: emailCodeForm.emailCode?.trim(),
-        })
-  // 登录成功，把登录态保存到全局状态中
-  if (res.data.code === 0 && res.data.data) {
-    await finishLogin()
-  } else {
-    message.error('登录失败，' + res.data.message)
+  if (submitLoading.value) {
+    return
+  }
+  submitLoading.value = true
+  try {
+    const res =
+      loginMode.value === 'password'
+        ? await userLogin({
+            userAccount: formState.userAccount?.trim(),
+            userPassword: formState.userPassword,
+          })
+        : await userEmailCodeLogin({
+            userEmail: emailCodeForm.userEmail?.trim(),
+            emailCode: emailCodeForm.emailCode?.trim(),
+          })
+    // 登录成功，把登录态保存到全局状态中
+    if (res.data.code === 0 && res.data.data) {
+      await finishLogin(res.data.data)
+    } else {
+      message.error(res.data.message || '登录失败，请检查输入')
+    }
+  } catch (error) {
+    console.error('登录失败：', error)
+    message.error('登录失败，请稍后重试')
+  } finally {
+    submitLoading.value = false
   }
 }
 
