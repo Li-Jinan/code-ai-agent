@@ -137,10 +137,13 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         } else {
             queryWrapper.eq("userAccount", userAccount);
         }
-        queryWrapper.eq("userPassword", encryptPassword);
         User user = this.mapper.selectOneByQuery(queryWrapper);
-        if (user == null) {
+        if (user == null || !isPasswordMatched(userPassword, encryptPassword, user.getUserPassword())) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "用户不存在或密码错误");
+        }
+        if (!encryptPassword.equals(user.getUserPassword())) {
+            user.setUserPassword(encryptPassword);
+            this.updateById(user);
         }
         // 4. 如果用户存在，记录用户的登录态
         request.getSession().setAttribute(USER_LOGIN_STATE, user);
@@ -277,6 +280,18 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         // 盐值，混淆密码
         final String SALT = "jinan";
         return DigestUtils.md5DigestAsHex((userPassword + SALT).getBytes(StandardCharsets.UTF_8));
+    }
+
+    private boolean isPasswordMatched(String rawPassword, String currentEncryptPassword, String storedPassword) {
+        if (currentEncryptPassword.equals(storedPassword)) {
+            return true;
+        }
+        return getLegacyEncryptPassword(rawPassword).equals(storedPassword);
+    }
+
+    private String getLegacyEncryptPassword(String userPassword) {
+        final String LEGACY_SALT = "yupi";
+        return DigestUtils.md5DigestAsHex((userPassword + LEGACY_SALT).getBytes(StandardCharsets.UTF_8));
     }
 
     private boolean isEmail(String value) {
