@@ -53,6 +53,16 @@
               placeholder="粘贴图片 URL，留空则使用默认头像"
             />
           </a-form-item>
+          <a-form-item
+            label="邮箱"
+            name="userEmail"
+            :rules="[
+              { required: true, message: '请输入邮箱' },
+              { type: 'email', message: '邮箱格式不正确' },
+            ]"
+          >
+            <a-input v-model:value="profileForm.userEmail" placeholder="请输入邮箱" />
+          </a-form-item>
           <a-form-item label="个人简介" name="userProfile">
             <a-textarea
               v-model:value="profileForm.userProfile"
@@ -84,6 +94,7 @@ const savingProfile = ref(false)
 const profileForm = reactive({
   userName: '',
   userAvatar: '',
+  userEmail: '',
   userProfile: '',
 })
 
@@ -94,6 +105,7 @@ const roleText = computed(() => (loginUserStore.loginUser.userRole === 'admin' ?
 const syncProfileForm = () => {
   profileForm.userName = loginUserStore.loginUser.userName || ''
   profileForm.userAvatar = loginUserStore.loginUser.userAvatar || ''
+  profileForm.userEmail = loginUserStore.loginUser.userEmail || ''
   profileForm.userProfile = loginUserStore.loginUser.userProfile || ''
 }
 
@@ -110,11 +122,17 @@ const saveProfile = async () => {
     message.warning('昵称不能为空')
     return
   }
+  const userEmail = profileForm.userEmail.trim()
+  if (!userEmail) {
+    message.warning('邮箱不能为空')
+    return
+  }
   savingProfile.value = true
   try {
     const res = await updateMyUser({
       userName,
       userAvatar: getAvatarUrl(profileForm.userAvatar),
+      userEmail,
       userProfile: profileForm.userProfile.trim(),
     })
     if (res.data.code === 0 && res.data.data) {

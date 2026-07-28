@@ -34,9 +34,10 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
 
     private static final String EMAIL_PATTERN = "^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$";
     private static final String DEFAULT_USER_AVATAR = "/userAvatar.svg";
+    private static final String DEFAULT_USER_NAME = "新用户";
 
     @Override
-    public long userRegister(String userAccount, String userEmail, String userPassword, String checkPassword) {
+    public long userRegister(String userAccount, String userEmail, String userName, String userPassword, String checkPassword) {
         // 1. 校验参数
         if (StrUtil.hasBlank(userAccount, userEmail, userPassword, checkPassword)) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "参数为空");
@@ -73,7 +74,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         user.setUserAccount(userAccount);
         user.setUserEmail(userEmail);
         user.setUserPassword(encryptPassword);
-        user.setUserName("无名");
+        user.setUserName(StrUtil.blankToDefault(userName, DEFAULT_USER_NAME).trim());
         user.setUserAvatar(DEFAULT_USER_AVATAR);
         user.setUserRole(UserRoleEnum.USER.getValue());
         boolean saveResult = this.save(user);

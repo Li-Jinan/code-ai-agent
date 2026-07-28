@@ -3,6 +3,7 @@ package com.jinan.codeaiagent.controller;
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.util.StrUtil;
 import com.mybatisflex.core.paginate.Page;
+import com.mybatisflex.core.query.QueryWrapper;
 import com.jinan.codeaiagent.annotation.AuthCheck;
 import com.jinan.codeaiagent.common.BaseResponse;
 import com.jinan.codeaiagent.common.DeleteRequest;
@@ -35,6 +36,7 @@ import java.util.List;
 public class UserController {
 
     private static final String DEFAULT_USER_AVATAR = "/userAvatar.svg";
+    private static final String EMAIL_PATTERN = "^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$";
 
     @Resource
     private UserService userService;
@@ -50,9 +52,10 @@ public class UserController {
         ThrowUtils.throwIf(userRegisterRequest == null, ErrorCode.PARAMS_ERROR);
         String userAccount = userRegisterRequest.getUserAccount();
         String userEmail = userRegisterRequest.getUserEmail();
+        String userName = userRegisterRequest.getUserName();
         String userPassword = userRegisterRequest.getUserPassword();
         String checkPassword = userRegisterRequest.getCheckPassword();
-        long result = userService.userRegister(userAccount, userEmail, userPassword, checkPassword);
+        long result = userService.userRegister(userAccount, userEmail, userName, userPassword, checkPassword);
         return ResultUtils.success(result);
     }
 
@@ -169,10 +172,17 @@ public class UserController {
                                                   HttpServletRequest request) {
         ThrowUtils.throwIf(userUpdateRequest == null, ErrorCode.PARAMS_ERROR);
         ThrowUtils.throwIf(StrUtil.isBlank(userUpdateRequest.getUserName()), ErrorCode.PARAMS_ERROR, "昵称不能为空");
+        ThrowUtils.throwIf(!isEmail(userUpdateRequest.getUserEmail()), ErrorCode.PARAMS_ERROR, "邮箱格式不正确");
         User loginUser = userService.getLoginUser(request);
+        QueryWrapper emailQueryWrapper = QueryWrapper.create()
+                .eq("userEmail", userUpdateRequest.getUserEmail())
+                .ne("id", loginUser.getId());
+        long emailCount = userService.count(emailQueryWrapper);
+        ThrowUtils.throwIf(emailCount > 0, ErrorCode.PARAMS_ERROR, "邮箱已被使用");
         User user = new User();
         user.setId(loginUser.getId());
         user.setUserName(userUpdateRequest.getUserName());
+        user.setUserEmail(userUpdateRequest.getUserEmail());
         user.setUserAvatar(getAvatarOrDefault(userUpdateRequest.getUserAvatar()));
         user.setUserProfile(userUpdateRequest.getUserProfile());
         boolean result = userService.updateById(user);
@@ -204,5 +214,9 @@ public class UserController {
 
     private String getAvatarOrDefault(String userAvatar) {
         return StrUtil.blankToDefault(userAvatar, DEFAULT_USER_AVATAR).trim();
+    }
+
+    private boolean isEmail(String value) {
+        return StrUtil.isNotBlank(value) && value.matches(EMAIL_PATTERN);
     }
 }

@@ -6,6 +6,9 @@
       <a-form-item name="userAccount" :rules="[{ required: true, message: '请输入账号' }]">
         <a-input v-model:value="formState.userAccount" placeholder="请输入账号" />
       </a-form-item>
+      <a-form-item name="userName">
+        <a-input v-model:value="formState.userName" placeholder="请输入昵称（可选）" :maxlength="30" />
+      </a-form-item>
       <a-form-item
         name="userEmail"
         :rules="[
@@ -55,6 +58,7 @@ const router = useRouter()
 
 const formState = reactive<API.UserRegisterRequest>({
   userAccount: '',
+  userName: '',
   userEmail: '',
   userPassword: '',
   checkPassword: '',
