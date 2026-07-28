@@ -61,6 +61,14 @@
         密码登录需要先注册账号，邮箱验证码可直接登录或注册
         <RouterLink to="/user/register">去注册</RouterLink>
       </div>
+      <a-form-item v-if="loginMode === 'emailCode'" class="agreement-item">
+        <a-checkbox v-model:checked="agreementChecked">
+          我已阅读并同意
+          <a-button type="link" class="agreement-link" @click.prevent="showAgreement">
+            用户协议与隐私说明
+          </a-button>
+        </a-checkbox>
+      </a-form-item>
       <a-form-item>
         <a-button type="primary" html-type="submit" style="width: 100%" :loading="submitLoading">
           {{ loginMode === 'emailCode' ? '登录 / 注册' : '登录' }}
@@ -79,6 +87,7 @@ import { message, Modal } from 'ant-design-vue'
 const loginMode = ref<'password' | 'emailCode'>('password')
 const sendingCode = ref(false)
 const submitLoading = ref(false)
+const agreementChecked = ref(false)
 const countdown = ref(0)
 let countdownTimer: number | undefined
 
@@ -108,6 +117,16 @@ const showActionModal = (title: string, content: string, okText = '确认') => {
   })
 }
 
+const showAgreement = () => {
+  Modal.info({
+    title: '用户协议与隐私说明',
+    content:
+      '你需要使用真实可访问的邮箱接收验证码。平台会保存账号、邮箱、应用作品和必要登录状态，用于提供登录、应用生成和个人主页功能。请勿上传违法、侵权或包含敏感信息的内容。',
+    centered: true,
+    okText: '我知道了',
+  })
+}
+
 const finishLogin = async (loginUser: API.LoginUserVO) => {
   loginUserStore.setLoginUser(loginUser)
   message.success('登录成功')
@@ -133,13 +152,17 @@ const startCountdown = () => {
 
 const sendCode = async () => {
   const userEmail = emailCodeForm.userEmail?.trim()
+  if (!agreementChecked.value) {
+    showActionModal('请先同意用户协议', '邮箱验证码会用于登录或自动创建账号，请先阅读并同意用户协议与隐私说明。')
+    return
+  }
   if (!userEmail) {
     showActionModal('需要邮箱地址', '请输入邮箱后再发送验证码。')
     return
   }
   sendingCode.value = true
   try {
-    const res = await sendEmailLoginCode({ userEmail })
+    const res = await sendEmailLoginCode({ userEmail, verifyScene: '登录或注册账号' })
     if (res.data.code === 0) {
       message.success('验证码已发送，未注册邮箱会自动创建账号')
       startCountdown()
@@ -160,6 +183,10 @@ const sendCode = async () => {
  */
 const handleSubmit = async () => {
   if (submitLoading.value) {
+    return
+  }
+  if (loginMode.value === 'emailCode' && !agreementChecked.value) {
+    showActionModal('请先同意用户协议', '邮箱验证码登录会在账号不存在时自动注册，请先阅读并同意用户协议与隐私说明。')
     return
   }
   submitLoading.value = true
@@ -249,5 +276,14 @@ onUnmounted(() => {
   color: #bbb;
   font-size: 13px;
   margin-bottom: 16px;
+}
+
+.agreement-item {
+  margin-bottom: 16px;
+}
+
+.agreement-link {
+  height: auto;
+  padding: 0 2px;
 }
 </style>

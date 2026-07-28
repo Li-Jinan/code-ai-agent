@@ -148,7 +148,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     }
 
     @Override
-    public boolean sendEmailLoginCode(String userEmail) {
+    public boolean sendEmailLoginCode(String userEmail, String verifyScene) {
         if (!isEmail(userEmail)) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "邮箱格式不正确");
         }
@@ -173,8 +173,10 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
             SimpleMailMessage message = new SimpleMailMessage();
             message.setFrom(mailFrom);
             message.setTo(userEmail);
-            message.setSubject("今安 AI 应用登录验证码");
-            message.setText("你的登录验证码是：" + code + "，5 分钟内有效。若非本人操作，请忽略本邮件。");
+            String sceneText = normalizeVerifyScene(verifyScene);
+            message.setSubject("今安 AI 应用验证码");
+            message.setText("【今安 AI 应用】您正在" + sceneText + "，验证码 " + code
+                    + "，5 分钟内有效。请勿向任何人泄露，非本人操作请忽略。");
             javaMailSender.send(message);
             return true;
         } catch (Exception e) {
@@ -285,5 +287,13 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
 
     private boolean isEmail(String value) {
         return StrUtil.isNotBlank(value) && value.matches(EMAIL_PATTERN);
+    }
+
+    private String normalizeVerifyScene(String verifyScene) {
+        String scene = StrUtil.blankToDefault(verifyScene, "登录或注册账号").trim();
+        if (scene.length() > 20) {
+            return scene.substring(0, 20);
+        }
+        return scene;
     }
 }

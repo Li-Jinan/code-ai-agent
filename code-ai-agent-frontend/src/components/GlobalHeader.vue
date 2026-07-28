@@ -121,7 +121,7 @@
 <script setup lang="ts">
 import { computed, h, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { type MenuProps, message } from 'ant-design-vue'
+import { type MenuProps, message, Modal } from 'ant-design-vue'
 import { useLoginUserStore } from '@/stores/loginUser.ts'
 import { updateMyUser, userLogout } from '@/api/userController.ts'
 import { LogoutOutlined, HomeOutlined, EditOutlined, UserOutlined } from '@ant-design/icons-vue'
@@ -200,16 +200,28 @@ const handleMenuClick: MenuProps['onClick'] = (e) => {
 
 // 退出登录
 const doLogout = async () => {
-  const res = await userLogout()
-  if (res.data.code === 0) {
-    loginUserStore.setLoginUser({
-      userName: '未登录',
-    })
-    message.success('退出登录成功')
-    await router.push('/user/login')
-  } else {
-    message.error('退出登录失败，' + res.data.message)
-  }
+  Modal.confirm({
+    title: '确认退出登录？',
+    content: '退出后需要重新登录才能继续创建、编辑和管理你的应用。',
+    centered: true,
+    okText: '退出登录',
+    cancelText: '取消',
+    okButtonProps: {
+      danger: true,
+    },
+    async onOk() {
+      const res = await userLogout()
+      if (res.data.code === 0) {
+        loginUserStore.setLoginUser({
+          userName: '未登录',
+        })
+        message.success('退出登录成功')
+        await router.push('/user/login')
+      } else {
+        throw new Error(res.data.message || '退出登录失败')
+      }
+    },
+  })
 }
 
 const openProfileModal = () => {

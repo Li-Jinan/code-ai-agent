@@ -16,4 +16,9 @@ public class UserEmailCodeRequest implements Serializable {
      * 邮箱
      */
     private String userEmail;
+
+    /**
+     * 验证码用途
+     */
+    private String verifyScene;
 }

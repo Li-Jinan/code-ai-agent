@@ -239,6 +239,7 @@ declare namespace API {
 
   type UserEmailCodeRequest = {
     userEmail?: string
+    verifyScene?: string
   }
 
   type UserEmailLoginRequest = {

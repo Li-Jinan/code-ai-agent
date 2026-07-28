@@ -81,7 +81,10 @@ public class UserController {
     @PostMapping("/email/code")
     public BaseResponse<Boolean> sendEmailLoginCode(@RequestBody UserEmailCodeRequest userEmailCodeRequest) {
         ThrowUtils.throwIf(userEmailCodeRequest == null, ErrorCode.PARAMS_ERROR);
-        boolean result = userService.sendEmailLoginCode(userEmailCodeRequest.getUserEmail());
+        boolean result = userService.sendEmailLoginCode(
+                userEmailCodeRequest.getUserEmail(),
+                userEmailCodeRequest.getVerifyScene()
+        );
         return ResultUtils.success(result);
     }
 

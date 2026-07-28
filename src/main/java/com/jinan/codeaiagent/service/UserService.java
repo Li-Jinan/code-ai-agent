@@ -49,9 +49,10 @@ public interface UserService extends IService<User> {
      * 发送邮箱登录验证码
      *
      * @param userEmail 用户邮箱
+     * @param verifyScene 验证码用途
      * @return 是否发送成功
      */
-    boolean sendEmailLoginCode(String userEmail);
+    boolean sendEmailLoginCode(String userEmail, String verifyScene);
 
     /**
      * 邮箱验证码登录
