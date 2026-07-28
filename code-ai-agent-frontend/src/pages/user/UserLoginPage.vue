@@ -74,7 +74,7 @@ import { computed, onUnmounted, reactive, ref } from 'vue'
 import { sendEmailLoginCode, userEmailCodeLogin, userLogin } from '@/api/userController.ts'
 import { useLoginUserStore } from '@/stores/loginUser.ts'
 import { useRouter } from 'vue-router'
-import { message } from 'ant-design-vue'
+import { message, Modal } from 'ant-design-vue'
 
 const loginMode = ref<'password' | 'emailCode'>('password')
 const sendingCode = ref(false)
@@ -96,6 +96,17 @@ const loginFormModel = computed(() => (loginMode.value === 'password' ? formStat
 
 const router = useRouter()
 const loginUserStore = useLoginUserStore()
+
+const showActionModal = (title: string, content: string, okText = '确认') => {
+  Modal.confirm({
+    title,
+    content,
+    centered: true,
+    okText,
+    cancelText: '取消',
+    maskClosable: false,
+  })
+}
 
 const finishLogin = async (loginUser: API.LoginUserVO) => {
   loginUserStore.setLoginUser(loginUser)
@@ -123,7 +134,7 @@ const startCountdown = () => {
 const sendCode = async () => {
   const userEmail = emailCodeForm.userEmail?.trim()
   if (!userEmail) {
-    message.warning('请先输入邮箱')
+    showActionModal('需要邮箱地址', '请输入邮箱后再发送验证码。')
     return
   }
   sendingCode.value = true
@@ -133,11 +144,11 @@ const sendCode = async () => {
       message.success('验证码已发送，未注册邮箱会自动创建账号')
       startCountdown()
     } else {
-      message.error(res.data.message || '发送失败，请稍后重试')
+      showActionModal('验证码发送失败', res.data.message || '发送失败，请稍后重试。', '重新填写')
     }
   } catch (error) {
     console.error('发送验证码失败：', error)
-    message.error('发送失败，请稍后重试')
+    showActionModal('验证码发送失败', '当前邮箱验证码暂时发不出去，请稍后重试或检查邮箱地址。', '重新填写')
   } finally {
     sendingCode.value = false
   }
@@ -167,11 +178,11 @@ const handleSubmit = async () => {
     if (res.data.code === 0 && res.data.data) {
       await finishLogin(res.data.data)
     } else {
-      message.error(res.data.message || '登录失败，请检查输入')
+      showActionModal('登录失败', res.data.message || '登录失败，请检查输入。', '重新填写')
     }
   } catch (error) {
     console.error('登录失败：', error)
-    message.error('登录失败，请稍后重试')
+    showActionModal('登录失败', '登录请求没有成功完成，请稍后重试。', '重新填写')
   } finally {
     submitLoading.value = false
   }
@@ -206,7 +217,26 @@ onUnmounted(() => {
 .login-mode {
   display: flex;
   width: 100%;
+  padding: 4px;
   margin-bottom: 16px;
+}
+
+.login-mode :deep(.ant-segmented-group) {
+  display: flex;
+  width: 100%;
+}
+
+.login-mode :deep(.ant-segmented-item) {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+}
+
+.login-mode :deep(.ant-segmented-item-label) {
+  width: 100%;
+  padding: 0 12px;
+  text-align: center;
+  font-weight: 500;
 }
 
 .code-button {
