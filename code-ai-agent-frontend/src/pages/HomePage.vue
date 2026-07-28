@@ -329,14 +329,61 @@ onMounted(() => {
                 <span></span>
                 <span></span>
               </div>
-              <div class="preview-body">
-                <div class="preview-line preview-line--wide"></div>
-                <div class="preview-line"></div>
-                <div class="preview-tiles">
-                  <i></i>
-                  <i></i>
-                  <i></i>
-                </div>
+              <div class="preview-body" :class="`preview-body--${item.accent}`">
+                <template v-if="item.accent === 'blog'">
+                  <div class="preview-nav">
+                    <span>Notes</span>
+                    <i></i>
+                  </div>
+                  <div class="preview-blog-hero">
+                    <strong>技术札记</strong>
+                    <small>AI / Vue / Spring Boot</small>
+                  </div>
+                  <div class="preview-posts">
+                    <b></b>
+                    <b></b>
+                    <b></b>
+                  </div>
+                </template>
+                <template v-else-if="item.accent === 'business'">
+                  <div class="preview-business-hero">
+                    <strong>Build Future</strong>
+                    <span></span>
+                  </div>
+                  <div class="preview-metrics">
+                    <b>98%</b>
+                    <b>24h</b>
+                    <b>12+</b>
+                  </div>
+                  <div class="preview-service-row">
+                    <i></i>
+                    <i></i>
+                  </div>
+                </template>
+                <template v-else-if="item.accent === 'shop'">
+                  <div class="preview-shop-top">
+                    <strong>New Arrival</strong>
+                    <span>¥99</span>
+                  </div>
+                  <div class="preview-products">
+                    <b><i></i><em></em></b>
+                    <b><i></i><em></em></b>
+                    <b><i></i><em></em></b>
+                  </div>
+                </template>
+                <template v-else>
+                  <div class="preview-portfolio-hero">
+                    <strong>Portfolio</strong>
+                    <span></span>
+                  </div>
+                  <div class="preview-gallery">
+                    <b></b>
+                    <b></b>
+                    <b></b>
+                    <b></b>
+                    <b></b>
+                  </div>
+                </template>
               </div>
             </div>
             <div class="showcase-content">
@@ -690,21 +737,29 @@ onMounted(() => {
 }
 
 .showcase-preview {
-  height: 150px;
-  padding: 16px;
-  background: linear-gradient(135deg, #e7f4ea 0%, #f8fbf8 100%);
+  height: 178px;
+  padding: 14px;
+  background:
+    radial-gradient(circle at 20% 18%, rgba(47, 125, 75, 0.18), transparent 30%),
+    linear-gradient(135deg, #e7f4ea 0%, #f8fbf8 100%);
 }
 
 .showcase-preview--business {
-  background: linear-gradient(135deg, #e7eef6 0%, #f8fbfc 100%);
+  background:
+    radial-gradient(circle at 82% 18%, rgba(55, 109, 171, 0.18), transparent 32%),
+    linear-gradient(135deg, #e7eef6 0%, #f8fbfc 100%);
 }
 
 .showcase-preview--shop {
-  background: linear-gradient(135deg, #f3eee3 0%, #fbfaf5 100%);
+  background:
+    radial-gradient(circle at 80% 20%, rgba(178, 124, 49, 0.18), transparent 32%),
+    linear-gradient(135deg, #f3eee3 0%, #fbfaf5 100%);
 }
 
 .showcase-preview--portfolio {
-  background: linear-gradient(135deg, #eeeaf5 0%, #fbf9fc 100%);
+  background:
+    radial-gradient(circle at 24% 18%, rgba(119, 86, 160, 0.18), transparent 32%),
+    linear-gradient(135deg, #eeeaf5 0%, #fbf9fc 100%);
 }
 
 .preview-browser {
@@ -727,36 +782,221 @@ onMounted(() => {
 }
 
 .preview-body {
-  height: 96px;
-  padding: 14px;
+  height: 126px;
+  padding: 12px;
   border-radius: 0 0 8px 8px;
-  background: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.82);
   border: 1px solid rgba(23, 58, 40, 0.08);
+  overflow: hidden;
 }
 
-.preview-line {
-  height: 10px;
-  width: 56%;
-  border-radius: 999px;
-  background: rgba(47, 125, 75, 0.2);
+.preview-nav,
+.preview-shop-top,
+.preview-portfolio-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
   margin-bottom: 10px;
 }
 
-.preview-line--wide {
-  width: 82%;
+.preview-nav span,
+.preview-shop-top strong,
+.preview-portfolio-hero strong,
+.preview-business-hero strong {
+  color: #173a28;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
 }
 
-.preview-tiles {
+.preview-nav i,
+.preview-portfolio-hero span {
+  width: 42px;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(47, 125, 75, 0.2);
+}
+
+.preview-blog-hero {
+  min-height: 48px;
+  padding: 10px;
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(47, 125, 75, 0.18), transparent 64%),
+    #f5fbf6;
+  margin-bottom: 9px;
+}
+
+.preview-blog-hero strong,
+.preview-blog-hero small {
+  display: block;
+}
+
+.preview-blog-hero strong {
+  color: #24583a;
+  font-size: 15px;
+  line-height: 1.2;
+}
+
+.preview-blog-hero small {
+  color: #6a7b70;
+  font-size: 10px;
+  margin-top: 5px;
+}
+
+.preview-posts {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  margin-top: 16px;
+  gap: 7px;
 }
 
-.preview-tiles i {
-  height: 26px;
+.preview-posts b {
+  height: 22px;
   border-radius: 6px;
-  background: rgba(47, 125, 75, 0.16);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.24), transparent),
+    rgba(47, 125, 75, 0.16);
+}
+
+.preview-business-hero {
+  min-height: 44px;
+  padding: 10px;
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(49, 104, 166, 0.2), transparent 68%),
+    #f5f9fc;
+  margin-bottom: 9px;
+}
+
+.preview-business-hero strong {
+  display: block;
+  color: #244765;
+}
+
+.preview-business-hero span {
+  display: block;
+  width: 62%;
+  height: 7px;
+  margin-top: 9px;
+  border-radius: 999px;
+  background: rgba(49, 104, 166, 0.22);
+}
+
+.preview-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 7px;
+  margin-bottom: 8px;
+}
+
+.preview-metrics b {
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  background: #eef4fa;
+  color: #315b83;
+  font-size: 11px;
+}
+
+.preview-service-row {
+  display: grid;
+  grid-template-columns: 1.2fr 0.8fr;
+  gap: 7px;
+}
+
+.preview-service-row i {
+  height: 22px;
+  border-radius: 6px;
+  background: rgba(49, 104, 166, 0.14);
+}
+
+.preview-shop-top {
+  padding: 9px 10px;
+  border-radius: 8px;
+  background: #fff9ef;
+}
+
+.preview-shop-top strong {
+  color: #6a4b1e;
+}
+
+.preview-shop-top span {
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: #f1dfbd;
+  color: #745324;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.preview-products {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 7px;
+}
+
+.preview-products b {
+  height: 62px;
+  padding: 7px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(143, 100, 39, 0.11);
+}
+
+.preview-products i,
+.preview-products em {
+  display: block;
+  border-radius: 5px;
+}
+
+.preview-products i {
+  height: 29px;
+  background:
+    linear-gradient(135deg, rgba(178, 124, 49, 0.32), transparent),
+    #f1e3c8;
+}
+
+.preview-products em {
+  width: 70%;
+  height: 7px;
+  margin-top: 8px;
+  background: rgba(132, 91, 35, 0.22);
+}
+
+.preview-portfolio-hero {
+  padding: 9px 10px;
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(119, 86, 160, 0.16), transparent 72%),
+    #faf7fc;
+}
+
+.preview-portfolio-hero strong {
+  color: #4b3b67;
+}
+
+.preview-gallery {
+  display: grid;
+  grid-template-columns: 1.2fr 0.8fr 1fr;
+  grid-auto-rows: 25px;
+  gap: 7px;
+}
+
+.preview-gallery b {
+  border-radius: 7px;
+  background:
+    linear-gradient(135deg, rgba(119, 86, 160, 0.28), transparent 70%),
+    #ebe4f0;
+}
+
+.preview-gallery b:first-child {
+  grid-row: span 2;
+}
+
+.preview-gallery b:nth-child(4) {
+  grid-column: span 2;
 }
 
 .showcase-content {
