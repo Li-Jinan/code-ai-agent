@@ -1,5 +1,12 @@
 <template>
-  <div class="app-card" :class="{ 'app-card--featured': featured }">
+  <div
+    class="app-card"
+    :class="{ 'app-card--featured': featured }"
+    role="button"
+    tabindex="0"
+    @click="handleCardClick"
+    @keydown.enter="handleCardClick"
+  >
     <div class="app-preview">
       <img v-if="app.cover" :src="app.cover" :alt="app.appName" />
       <div v-else class="app-placeholder">
@@ -7,8 +14,8 @@
       </div>
       <div class="app-overlay">
         <a-space>
-          <a-button type="primary" @click="handleViewChat">查看对话</a-button>
-          <a-button v-if="app.deployKey" type="default" @click="handleViewWork">查看作品</a-button>
+          <a-button type="primary" @click.stop="handleViewChat">查看对话</a-button>
+          <a-button v-if="app.deployKey" type="default" @click.stop="handleViewWork">查看作品</a-button>
         </a-space>
       </div>
     </div>
@@ -46,6 +53,14 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const emit = defineEmits<Emits>()
+
+const handleCardClick = () => {
+  if (props.app.deployKey) {
+    emit('view-work', props.app)
+    return
+  }
+  emit('view-chat', props.app.id)
+}
 
 const handleViewChat = () => {
   emit('view-chat', props.app.id)

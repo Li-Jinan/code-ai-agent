@@ -70,14 +70,32 @@ const showcaseCases = [
   },
 ]
 
+type ShowcaseCase = (typeof showcaseCases)[number]
+
+const showcaseDetailVisible = ref(false)
+const selectedShowcase = ref<ShowcaseCase | null>(null)
+
 // 设置提示词
 const setPrompt = (prompt: string) => {
   userPrompt.value = prompt
 }
 
-const useShowcaseCase = (item: (typeof showcaseCases)[number]) => {
+const useShowcaseCase = (item: ShowcaseCase) => {
   setPrompt(item.prompt)
   window.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
+const openShowcaseDetail = (item: ShowcaseCase) => {
+  selectedShowcase.value = item
+  showcaseDetailVisible.value = true
+}
+
+const createFromShowcase = () => {
+  if (!selectedShowcase.value) {
+    return
+  }
+  useShowcaseCase(selectedShowcase.value)
+  showcaseDetailVisible.value = false
 }
 
 // 优化提示词功能已移除
@@ -303,7 +321,7 @@ onMounted(() => {
             :key="item.title"
             type="button"
             class="showcase-card"
-            @click="useShowcaseCase(item)"
+            @click="openShowcaseDetail(item)"
           >
             <div class="showcase-preview" :class="`showcase-preview--${item.accent}`">
               <div class="preview-browser">
@@ -327,6 +345,12 @@ onMounted(() => {
               <p>{{ item.description }}</p>
               <div class="showcase-tags">
                 <span v-for="tag in item.tags" :key="tag">{{ tag }}</span>
+              </div>
+              <div class="showcase-card-actions">
+                <a-button type="link" @click.stop="openShowcaseDetail(item)">查看示例</a-button>
+                <a-button type="primary" size="small" @click.stop="useShowcaseCase(item)">
+                  使用模板
+                </a-button>
               </div>
             </div>
           </button>
@@ -358,6 +382,57 @@ onMounted(() => {
         </div>
       </div>
     </div>
+
+    <a-modal
+      v-model:open="showcaseDetailVisible"
+      :title="selectedShowcase?.title"
+      width="760px"
+      centered
+      ok-text="使用这个模板"
+      cancel-text="先看看"
+      @ok="createFromShowcase"
+    >
+      <div v-if="selectedShowcase" class="showcase-modal">
+        <div class="showcase-modal-preview" :class="`showcase-preview--${selectedShowcase.accent}`">
+          <div class="modal-browser">
+            <span></span>
+            <span></span>
+            <span></span>
+            <strong>{{ selectedShowcase.title }}</strong>
+          </div>
+          <div class="modal-preview-body">
+            <aside>
+              <i></i>
+              <i></i>
+              <i></i>
+            </aside>
+            <main>
+              <div class="modal-hero-line"></div>
+              <div class="modal-copy-line"></div>
+              <div class="modal-copy-line modal-copy-line--short"></div>
+              <div class="modal-card-row">
+                <b></b>
+                <b></b>
+                <b></b>
+              </div>
+            </main>
+          </div>
+        </div>
+        <div class="showcase-modal-info">
+          <div class="showcase-meta">{{ selectedShowcase.type }}</div>
+          <p>{{ selectedShowcase.description }}</p>
+          <div class="showcase-tags">
+            <span v-for="tag in selectedShowcase.tags" :key="tag">{{ tag }}</span>
+          </div>
+          <a-alert
+            class="showcase-modal-tip"
+            type="info"
+            show-icon
+            message="这是可生成效果示例，点击“使用这个模板”后会把提示词填入首页输入框。"
+          />
+        </div>
+      </div>
+    </a-modal>
   </div>
 </template>
 
@@ -720,6 +795,140 @@ onMounted(() => {
   background: #f2f7f3;
   color: #31533e;
   font-size: 12px;
+}
+
+.showcase-card-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.showcase-card-actions :deep(.ant-btn-link) {
+  padding: 0;
+  color: #2f7d4b;
+}
+
+.showcase-card-actions :deep(.ant-btn-primary) {
+  background: #2f7d4b;
+  border-color: #2f7d4b;
+}
+
+.showcase-modal {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(240px, 0.75fr);
+  gap: 22px;
+  align-items: stretch;
+}
+
+.showcase-modal-preview {
+  min-height: 300px;
+  padding: 18px;
+  border-radius: 8px;
+  border: 1px solid rgba(47, 125, 75, 0.12);
+}
+
+.modal-browser {
+  height: 36px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 14px;
+  border-radius: 8px 8px 0 0;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(23, 58, 40, 0.08);
+  border-bottom: none;
+}
+
+.modal-browser span {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #7eb88a;
+}
+
+.modal-browser strong {
+  margin-left: 8px;
+  color: #31533e;
+  font-size: 13px;
+}
+
+.modal-preview-body {
+  min-height: 230px;
+  display: grid;
+  grid-template-columns: 86px 1fr;
+  gap: 18px;
+  padding: 20px;
+  border-radius: 0 0 8px 8px;
+  background: rgba(255, 255, 255, 0.76);
+  border: 1px solid rgba(23, 58, 40, 0.08);
+}
+
+.modal-preview-body aside {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.modal-preview-body aside i {
+  height: 34px;
+  border-radius: 8px;
+  background: rgba(47, 125, 75, 0.14);
+}
+
+.modal-preview-body main {
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-hero-line {
+  height: 36px;
+  width: 70%;
+  border-radius: 999px;
+  background: rgba(47, 125, 75, 0.22);
+  margin: 12px 0 18px;
+}
+
+.modal-copy-line {
+  height: 12px;
+  width: 92%;
+  border-radius: 999px;
+  background: rgba(47, 125, 75, 0.14);
+  margin-bottom: 12px;
+}
+
+.modal-copy-line--short {
+  width: 58%;
+}
+
+.modal-card-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-top: auto;
+}
+
+.modal-card-row b {
+  height: 74px;
+  border-radius: 8px;
+  background: rgba(47, 125, 75, 0.16);
+}
+
+.showcase-modal-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.showcase-modal-info p {
+  color: #516459;
+  line-height: 1.7;
+  margin: 8px 0 16px;
+}
+
+.showcase-modal-tip {
+  margin-top: auto;
 }
 
 /* 我的作品网格 */
