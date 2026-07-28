@@ -126,15 +126,37 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         app.setUserId(loginUser.getId());
         // 应用名称暂时为 initPrompt 前 12 位
         app.setAppName(initPrompt.substring(0, Math.min(initPrompt.length(), 12)));
-        // 使用 AI 智能选择代码生成类型（多例模式）
-        AiCodeGenTypeRoutingService aiCodeGenTypeRoutingService = aiCodeGenTypeRoutingServiceFactory.createAiCodeGenTypeRoutingService();
-        CodeGenTypeEnum selectedCodeGenType = aiCodeGenTypeRoutingService.routeCodeGenType(initPrompt);
+        CodeGenTypeEnum selectedCodeGenType = routeCodeGenTypeSafely(initPrompt);
         app.setCodeGenType(selectedCodeGenType.getValue());
         // 插入数据库
         boolean result = this.save(app);
         ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR);
         log.info("应用创建成功，ID: {}, 类型: {}", app.getId(), selectedCodeGenType.getValue());
         return app.getId();
+    }
+
+    private CodeGenTypeEnum routeCodeGenTypeSafely(String initPrompt) {
+        try {
+            AiCodeGenTypeRoutingService aiCodeGenTypeRoutingService = aiCodeGenTypeRoutingServiceFactory.createAiCodeGenTypeRoutingService();
+            CodeGenTypeEnum selectedCodeGenType = aiCodeGenTypeRoutingService.routeCodeGenType(initPrompt);
+            if (selectedCodeGenType != null) {
+                return selectedCodeGenType;
+            }
+        } catch (Exception e) {
+            log.warn("AI 代码类型路由失败，使用本地规则兜底：{}", e.getMessage());
+        }
+        return routeCodeGenTypeLocally(initPrompt);
+    }
+
+    private CodeGenTypeEnum routeCodeGenTypeLocally(String initPrompt) {
+        String prompt = initPrompt.toLowerCase();
+        if (StrUtil.containsAny(prompt, "vue", "后台", "管理系统", "dashboard", "复杂交互", "登录注册", "购物车", "订单", "商城")) {
+            return CodeGenTypeEnum.VUE_PROJECT;
+        }
+        if (StrUtil.containsAny(prompt, "博客", "官网", "作品", "展示", "落地页", "个人主页", "portfolio", "blog", "landing")) {
+            return CodeGenTypeEnum.MULTI_FILE;
+        }
+        return CodeGenTypeEnum.HTML;
     }
 
     @Override
