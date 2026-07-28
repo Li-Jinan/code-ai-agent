@@ -171,6 +171,7 @@ declare namespace API {
   type LoginUserVO = {
     id?: number
     userAccount?: string
+    userEmail?: string
     userName?: string
     userAvatar?: string
     userProfile?: string
@@ -215,6 +216,7 @@ declare namespace API {
   type User = {
     id?: number
     userAccount?: string
+    userEmail?: string
     userPassword?: string
     userName?: string
     userAvatar?: string
@@ -229,6 +231,7 @@ declare namespace API {
   type UserAddRequest = {
     userName?: string
     userAccount?: string
+    userEmail?: string
     userAvatar?: string
     userProfile?: string
     userRole?: string
@@ -247,12 +250,14 @@ declare namespace API {
     id?: number
     userName?: string
     userAccount?: string
+    userEmail?: string
     userProfile?: string
     userRole?: string
   }
 
   type UserRegisterRequest = {
     userAccount?: string
+    userEmail?: string
     userPassword?: string
     checkPassword?: string
   }
@@ -261,6 +266,7 @@ declare namespace API {
     id?: number
     userName?: string
     userAvatar?: string
+    userEmail?: string
     userProfile?: string
     userRole?: string
   }
@@ -268,6 +274,7 @@ declare namespace API {
   type UserVO = {
     id?: number
     userAccount?: string
+    userEmail?: string
     userName?: string
     userAvatar?: string
     userProfile?: string

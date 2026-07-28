@@ -32,14 +32,20 @@ import static com.jinan.codeaiagent.constant.UserConstant.USER_LOGIN_STATE;
 @Service
 public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements UserService {
 
+    private static final String EMAIL_PATTERN = "^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$";
+    private static final String DEFAULT_USER_AVATAR = "/userAvatar.svg";
+
     @Override
-    public long userRegister(String userAccount, String userPassword, String checkPassword) {
+    public long userRegister(String userAccount, String userEmail, String userPassword, String checkPassword) {
         // 1. 校验参数
-        if (StrUtil.hasBlank(userAccount, userPassword, checkPassword)) {
+        if (StrUtil.hasBlank(userAccount, userEmail, userPassword, checkPassword)) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "参数为空");
         }
         if (userAccount.length() < 4) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "账号长度过短");
+        }
+        if (!isEmail(userEmail)) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "邮箱格式不正确");
         }
         if (userPassword.length() < 8 || checkPassword.length() < 8) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "密码长度过短");
@@ -54,13 +60,21 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         if (count > 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "账号重复");
         }
+        QueryWrapper emailQueryWrapper = new QueryWrapper();
+        emailQueryWrapper.eq("userEmail", userEmail);
+        long emailCount = this.mapper.selectCountByQuery(emailQueryWrapper);
+        if (emailCount > 0) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "邮箱已被注册");
+        }
         // 3. 加密密码
         String encryptPassword = getEncryptPassword(userPassword);
         // 4. 创建用户，插入数据库
         User user = new User();
         user.setUserAccount(userAccount);
+        user.setUserEmail(userEmail);
         user.setUserPassword(encryptPassword);
         user.setUserName("无名");
+        user.setUserAvatar(DEFAULT_USER_AVATAR);
         user.setUserRole(UserRoleEnum.USER.getValue());
         boolean saveResult = this.save(user);
         if (!saveResult) {
@@ -95,7 +109,11 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         String encryptPassword = getEncryptPassword(userPassword);
         // 3. 查询用户是否存在
         QueryWrapper queryWrapper = new QueryWrapper();
-        queryWrapper.eq("userAccount", userAccount);
+        if (isEmail(userAccount)) {
+            queryWrapper.eq("userEmail", userAccount);
+        } else {
+            queryWrapper.eq("userAccount", userAccount);
+        }
         queryWrapper.eq("userPassword", encryptPassword);
         User user = this.mapper.selectOneByQuery(queryWrapper);
         if (user == null) {
@@ -163,6 +181,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         }
         Long id = userQueryRequest.getId();
         String userAccount = userQueryRequest.getUserAccount();
+        String userEmail = userQueryRequest.getUserEmail();
         String userName = userQueryRequest.getUserName();
         String userProfile = userQueryRequest.getUserProfile();
         String userRole = userQueryRequest.getUserRole();
@@ -172,6 +191,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
                 .eq("id", id) // where id = ${id}
                 .eq("userRole", userRole) // and userRole = ${userRole}
                 .like("userAccount", userAccount)
+                .like("userEmail", userEmail)
                 .like("userName", userName)
                 .like("userProfile", userProfile)
                 .orderBy(sortField, "ascend".equals(sortOrder));
@@ -182,5 +202,9 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         // 盐值，混淆密码
         final String SALT = "jinan";
         return DigestUtils.md5DigestAsHex((userPassword + SALT).getBytes(StandardCharsets.UTF_8));
+    }
+
+    private boolean isEmail(String value) {
+        return StrUtil.isNotBlank(value) && value.matches(EMAIL_PATTERN);
     }
 }

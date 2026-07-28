@@ -34,6 +34,8 @@ import java.util.List;
 @RequestMapping("/user")
 public class UserController {
 
+    private static final String DEFAULT_USER_AVATAR = "/userAvatar.svg";
+
     @Resource
     private UserService userService;
 
@@ -47,9 +49,10 @@ public class UserController {
     public BaseResponse<Long> userRegister(@RequestBody UserRegisterRequest userRegisterRequest) {
         ThrowUtils.throwIf(userRegisterRequest == null, ErrorCode.PARAMS_ERROR);
         String userAccount = userRegisterRequest.getUserAccount();
+        String userEmail = userRegisterRequest.getUserEmail();
         String userPassword = userRegisterRequest.getUserPassword();
         String checkPassword = userRegisterRequest.getCheckPassword();
-        long result = userService.userRegister(userAccount, userPassword, checkPassword);
+        long result = userService.userRegister(userAccount, userEmail, userPassword, checkPassword);
         return ResultUtils.success(result);
     }
 
@@ -97,6 +100,7 @@ public class UserController {
         ThrowUtils.throwIf(userAddRequest == null, ErrorCode.PARAMS_ERROR);
         User user = new User();
         BeanUtil.copyProperties(userAddRequest, user);
+        user.setUserAvatar(getAvatarOrDefault(user.getUserAvatar()));
         // 默认密码 12345678
         final String DEFAULT_PASSWORD = "12345678";
         String encryptPassword = userService.getEncryptPassword(DEFAULT_PASSWORD);
@@ -169,7 +173,7 @@ public class UserController {
         User user = new User();
         user.setId(loginUser.getId());
         user.setUserName(userUpdateRequest.getUserName());
-        user.setUserAvatar(userUpdateRequest.getUserAvatar());
+        user.setUserAvatar(getAvatarOrDefault(userUpdateRequest.getUserAvatar()));
         user.setUserProfile(userUpdateRequest.getUserProfile());
         boolean result = userService.updateById(user);
         ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR);
@@ -196,5 +200,9 @@ public class UserController {
         List<UserVO> userVOList = userService.getUserVOList(userPage.getRecords());
         userVOPage.setRecords(userVOList);
         return ResultUtils.success(userVOPage);
+    }
+
+    private String getAvatarOrDefault(String userAvatar) {
+        return StrUtil.blankToDefault(userAvatar, DEFAULT_USER_AVATAR).trim();
     }
 }

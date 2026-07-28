@@ -35,6 +35,9 @@
                     <div class="user-summary-content">
                       <div class="user-summary-name">{{ displayUserName }}</div>
                       <div class="user-summary-account">{{ loginUserStore.loginUser.userAccount }}</div>
+                      <div v-if="loginUserStore.loginUser.userEmail" class="user-summary-account">
+                        {{ loginUserStore.loginUser.userEmail }}
+                      </div>
                       <a-tag :color="loginUserStore.loginUser.userRole === 'admin' ? 'green' : 'blue'">
                         {{ roleText }}
                       </a-tag>
@@ -44,6 +47,12 @@
                     {{ loginUserStore.loginUser.userProfile }}
                   </div>
                   <a-divider class="user-dropdown-divider" />
+                  <a-button type="text" block class="dropdown-action" @click="goProfilePage">
+                    <template #icon>
+                      <UserOutlined />
+                    </template>
+                    个人主页
+                  </a-button>
                   <a-button type="text" block class="dropdown-action" @click="openProfileModal">
                     <template #icon>
                       <EditOutlined />
@@ -75,7 +84,7 @@
       @ok="saveProfile"
     >
       <div class="profile-preview">
-        <a-avatar :src="profileForm.userAvatar || defaultUserAvatar" :size="64" />
+        <a-avatar :src="getAvatarUrl(profileForm.userAvatar)" :size="64" />
         <div>
           <div class="profile-preview-name">{{ profileForm.userName || displayUserName }}</div>
           <div class="profile-preview-account">{{ loginUserStore.loginUser.userAccount }}</div>
@@ -115,12 +124,12 @@ import { useRouter } from 'vue-router'
 import { type MenuProps, message } from 'ant-design-vue'
 import { useLoginUserStore } from '@/stores/loginUser.ts'
 import { updateMyUser, userLogout } from '@/api/userController.ts'
-import { LogoutOutlined, HomeOutlined, EditOutlined } from '@ant-design/icons-vue'
-import defaultUserAvatar from '@/assets/userAvatar.svg'
+import { LogoutOutlined, HomeOutlined, EditOutlined, UserOutlined } from '@ant-design/icons-vue'
+import { getAvatarUrl } from '@/utils/avatar'
 
 const loginUserStore = useLoginUserStore()
 const router = useRouter()
-const userAvatarSrc = computed(() => loginUserStore.loginUser.userAvatar || defaultUserAvatar)
+const userAvatarSrc = computed(() => getAvatarUrl(loginUserStore.loginUser.userAvatar))
 const displayUserName = computed(() => loginUserStore.loginUser.userName || '我')
 const roleText = computed(() => (loginUserStore.loginUser.userRole === 'admin' ? '管理员' : '普通用户'))
 const profileModalVisible = ref(false)
@@ -210,6 +219,10 @@ const openProfileModal = () => {
   profileModalVisible.value = true
 }
 
+const goProfilePage = async () => {
+  await router.push('/user/profile')
+}
+
 const saveProfile = async () => {
   const userName = profileForm.userName.trim()
   if (!userName) {
@@ -220,7 +233,7 @@ const saveProfile = async () => {
   try {
     const res = await updateMyUser({
       userName,
-      userAvatar: profileForm.userAvatar.trim(),
+      userAvatar: getAvatarUrl(profileForm.userAvatar),
       userProfile: profileForm.userProfile.trim(),
     })
     if (res.data.code === 0 && res.data.data) {

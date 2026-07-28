@@ -227,9 +227,9 @@ import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
 import AppDetailModal from '@/components/AppDetailModal.vue'
 import DeploySuccessModal from '@/components/DeploySuccessModal.vue'
 import aiAvatar from '@/assets/treeAvatar.svg'
-import defaultUserAvatar from '@/assets/userAvatar.svg'
 import { API_BASE_URL, getStaticPreviewUrl } from '@/config/env'
 import { VisualEditor, type ElementInfo } from '@/utils/visualEditor'
+import { getAvatarUrl } from '@/utils/avatar'
 
 import {
   CloudUploadOutlined,
@@ -298,7 +298,7 @@ const isAdmin = computed(() => {
 })
 
 const userAvatarSrc = computed(() => {
-  return loginUserStore.loginUser.userAvatar || defaultUserAvatar
+  return getAvatarUrl(loginUserStore.loginUser.userAvatar)
 })
 
 // 应用详情相关

@@ -1,6 +1,7 @@
 package com.jinan.codeaiagent.user.controller;
 
 import cn.hutool.core.bean.BeanUtil;
+import cn.hutool.core.util.StrUtil;
 import com.mybatisflex.core.paginate.Page;
 import com.jinan.codeaiagent.annotation.AuthCheck;
 import com.jinan.codeaiagent.common.BaseResponse;
@@ -33,6 +34,8 @@ import java.util.List;
 @RequestMapping("/user")
 public class UserController {
 
+    private static final String DEFAULT_USER_AVATAR = "/userAvatar.svg";
+
     @Resource
     private UserService userService;
 
@@ -46,9 +49,10 @@ public class UserController {
     public BaseResponse<Long> userRegister(@RequestBody UserRegisterRequest userRegisterRequest) {
         ThrowUtils.throwIf(userRegisterRequest == null, ErrorCode.PARAMS_ERROR);
         String userAccount = userRegisterRequest.getUserAccount();
+        String userEmail = userRegisterRequest.getUserEmail();
         String userPassword = userRegisterRequest.getUserPassword();
         String checkPassword = userRegisterRequest.getCheckPassword();
-        long result = userService.userRegister(userAccount, userPassword, checkPassword);
+        long result = userService.userRegister(userAccount, userEmail, userPassword, checkPassword);
         return ResultUtils.success(result);
     }
 
@@ -96,6 +100,7 @@ public class UserController {
         ThrowUtils.throwIf(userAddRequest == null, ErrorCode.PARAMS_ERROR);
         User user = new User();
         BeanUtil.copyProperties(userAddRequest, user);
+        user.setUserAvatar(getAvatarOrDefault(user.getUserAvatar()));
         // 默认密码 12345678
         final String DEFAULT_PASSWORD = "12345678";
         String encryptPassword = userService.getEncryptPassword(DEFAULT_PASSWORD);
@@ -151,6 +156,7 @@ public class UserController {
         }
         User user = new User();
         BeanUtil.copyProperties(userUpdateRequest, user);
+        user.setUserAvatar(getAvatarOrDefault(user.getUserAvatar()));
         boolean result = userService.updateById(user);
         ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR);
         return ResultUtils.success(true);
@@ -174,5 +180,9 @@ public class UserController {
         List<UserVO> userVOList = userService.getUserVOList(userPage.getRecords());
         userVOPage.setRecords(userVOList);
         return ResultUtils.success(userVOPage);
+    }
+
+    private String getAvatarOrDefault(String userAvatar) {
+        return StrUtil.blankToDefault(userAvatar, DEFAULT_USER_AVATAR).trim();
     }
 }
