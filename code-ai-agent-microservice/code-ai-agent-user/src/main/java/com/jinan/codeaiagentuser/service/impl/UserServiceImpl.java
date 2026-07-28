@@ -24,6 +24,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.DigestUtils;
 
 import java.nio.charset.StandardCharsets;
+import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -45,6 +46,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     private static final String EMAIL_CODE_LIMIT_KEY_PREFIX = "code-ai-agent:user:email-login-limit:";
     private static final Duration EMAIL_CODE_TTL = Duration.ofMinutes(5);
     private static final Duration EMAIL_CODE_SEND_INTERVAL = Duration.ofSeconds(60);
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     @Resource
     private StringRedisTemplate stringRedisTemplate;
@@ -164,7 +166,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         if (Boolean.FALSE.equals(canSend)) {
             throw new BusinessException(ErrorCode.OPERATION_ERROR, "验证码发送太频繁，请稍后再试");
         }
-        String code = String.valueOf((int) ((Math.random() * 9 + 1) * 100000));
+        String code = String.format("%06d", SECURE_RANDOM.nextInt(1000000));
         String codeKey = EMAIL_CODE_KEY_PREFIX + userEmail;
         stringRedisTemplate.opsForValue().set(codeKey, code, EMAIL_CODE_TTL);
         try {
