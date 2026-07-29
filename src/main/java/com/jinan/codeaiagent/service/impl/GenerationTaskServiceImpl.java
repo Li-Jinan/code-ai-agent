@@ -1,6 +1,7 @@
 package com.jinan.codeaiagent.service.impl;
 
 import cn.hutool.core.util.StrUtil;
+import com.jinan.codeaiagent.constant.AppConstant;
 import com.jinan.codeaiagent.constant.UserConstant;
 import com.jinan.codeaiagent.exception.BusinessException;
 import com.jinan.codeaiagent.exception.ErrorCode;
@@ -10,6 +11,7 @@ import com.jinan.codeaiagent.model.entity.App;
 import com.jinan.codeaiagent.model.entity.GenerationTask;
 import com.jinan.codeaiagent.model.entity.User;
 import com.jinan.codeaiagent.model.enums.GenerationTaskStatusEnum;
+import com.jinan.codeaiagent.model.enums.CodeGenTypeEnum;
 import com.jinan.codeaiagent.service.AppService;
 import com.jinan.codeaiagent.service.GenerationTaskService;
 import com.mybatisflex.core.query.QueryWrapper;
@@ -20,6 +22,7 @@ import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.io.File;
 import java.util.List;
 
 @Service
@@ -68,6 +71,7 @@ public class GenerationTaskServiceImpl extends ServiceImpl<GenerationTaskMapper,
         GenerationTask task = this.getOne(queryWrapper);
         if (task != null) {
             checkTaskAuth(task, loginUser);
+            normalizeSucceededTask(task);
         }
         return task;
     }
@@ -79,6 +83,7 @@ public class GenerationTaskServiceImpl extends ServiceImpl<GenerationTaskMapper,
         GenerationTask task = this.getById(taskId);
         ThrowUtils.throwIf(task == null, ErrorCode.NOT_FOUND_ERROR, "生成任务不存在");
         checkTaskAuth(task, loginUser);
+        normalizeSucceededTask(task);
         return task;
     }
 
@@ -98,13 +103,48 @@ public class GenerationTaskServiceImpl extends ServiceImpl<GenerationTaskMapper,
     private void runTask(Long taskId, Long appId, String message, User loginUser) {
         updateTaskStatus(taskId, GenerationTaskStatusEnum.RUNNING, null, LocalDateTime.now(), null);
         try {
-            appService.chatToGenCode(appId, message, loginUser).collectList().block();
+            List<String> chunks = appService.chatToGenCode(appId, message, loginUser).collectList().block();
+            if (containsGenerationFailure(chunks)) {
+                throw new BusinessException(ErrorCode.SYSTEM_ERROR, "AI 返回格式异常，请点击重试。");
+            }
+            App app = appService.getById(appId);
+            if (!hasGeneratedArtifact(app)) {
+                throw new BusinessException(ErrorCode.SYSTEM_ERROR, "生成未产出可预览文件，请点击重试。");
+            }
             updateTaskStatus(taskId, GenerationTaskStatusEnum.SUCCEEDED, null, null, LocalDateTime.now());
         } catch (Exception e) {
             log.error("后台生成任务失败，taskId: {}, appId: {}", taskId, appId, e);
             updateTaskStatus(taskId, GenerationTaskStatusEnum.FAILED,
                     getFriendlyErrorMessage(e), null, LocalDateTime.now());
         }
+    }
+
+    private boolean containsGenerationFailure(List<String> chunks) {
+        if (chunks == null || chunks.isEmpty()) {
+            return true;
+        }
+        return chunks.stream()
+                .filter(StrUtil::isNotBlank)
+                .anyMatch(this::isFailureMessage);
+    }
+
+    private boolean isFailureMessage(String message) {
+        return StrUtil.containsAny(message, "AI回复失败", "生成失败", "JsonParseException", "Unexpected character", "系统错误");
+    }
+
+    private boolean hasGeneratedArtifact(App app) {
+        if (app == null || app.getId() == null || StrUtil.isBlank(app.getCodeGenType())) {
+            return false;
+        }
+        CodeGenTypeEnum codeGenTypeEnum = CodeGenTypeEnum.getEnumByValue(app.getCodeGenType());
+        if (codeGenTypeEnum == null) {
+            return false;
+        }
+        File appDir = new File(AppConstant.CODE_OUTPUT_ROOT_DIR, app.getCodeGenType() + "_" + app.getId());
+        return switch (codeGenTypeEnum) {
+            case HTML, MULTI_FILE -> new File(appDir, "index.html").isFile();
+            case VUE_PROJECT -> new File(appDir, "dist/index.html").isFile() || new File(appDir, "index.html").isFile();
+        };
     }
 
     private void updateTaskStatus(Long taskId, GenerationTaskStatusEnum status, String errorMessage,
@@ -130,8 +170,27 @@ public class GenerationTaskServiceImpl extends ServiceImpl<GenerationTaskMapper,
         }
     }
 
+    private void normalizeSucceededTask(GenerationTask task) {
+        if (task == null || !GenerationTaskStatusEnum.SUCCEEDED.getValue().equals(task.getStatus())) {
+            return;
+        }
+        App app = appService.getById(task.getAppId());
+        if (hasGeneratedArtifact(app)) {
+            return;
+        }
+        task.setStatus(GenerationTaskStatusEnum.FAILED.getValue());
+        task.setErrorMessage("生成未产出可预览文件，请点击重试。");
+        task.setFinishTime(LocalDateTime.now());
+        this.updateById(task);
+    }
+
     private String getFriendlyErrorMessage(Throwable error) {
         String message = error == null ? "" : error.getMessage();
+        if (message != null && StrUtil.isNotBlank(message)
+                && !message.contains("Exception")
+                && !message.contains("java.")) {
+            return message;
+        }
         if (message != null && (message.contains("JsonParseException") || message.contains("Unexpected character"))) {
             return "AI 返回格式异常，请点击重试。";
         }

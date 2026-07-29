@@ -249,6 +249,7 @@ import {
   deleteApp as deleteAppApi,
   startGenerationTask,
   getGenerationTask,
+  getLatestGenerationTask,
 } from '@/api/appController'
 import { listAppChatHistory } from '@/api/chatHistoryController'
 import { CodeGenTypeEnum, formatCodeGenType } from '@/utils/codeGenTypes'
@@ -292,6 +293,7 @@ const userInput = ref('')
 const isGenerating = ref(false)
 const messagesContainer = ref<HTMLElement>()
 const RECENT_GENERATION_KEY = 'code-ai-agent:recent-generation'
+const latestGenerationTask = ref<API.GenerationTask | null>(null)
 
 interface RecentGeneration {
   appId: string
@@ -350,6 +352,8 @@ const normalizeAiHistoryMessage = (content: string) => {
 const hasSuccessfulGeneratedMessage = computed(() => {
   return messages.value.some((item) => item.type === 'ai' && item.content && !isFailedAiMessage(item.content))
 })
+
+const latestTaskFailed = computed(() => latestGenerationTask.value?.status === 'failed')
 
 const canResumeGeneration = computed(() => {
   if (!isOwner.value || isGenerating.value || messages.value.length === 0) {
@@ -457,6 +461,22 @@ const loadMoreHistory = async () => {
   await loadChatHistory(true)
 }
 
+const loadLatestGenerationTask = async () => {
+  if (!appId.value) {
+    latestGenerationTask.value = null
+    return null
+  }
+  try {
+    const res = await getLatestGenerationTask({ appId: appId.value })
+    latestGenerationTask.value = res.data.data || null
+    return latestGenerationTask.value
+  } catch (error) {
+    console.error('加载生成任务状态失败：', error)
+    latestGenerationTask.value = null
+    return null
+  }
+}
+
 // 获取应用信息
 const fetchAppInfo = async () => {
   const id = route.params.id as string
@@ -475,8 +495,12 @@ const fetchAppInfo = async () => {
 
       // 先加载对话历史
       await loadChatHistory()
-      // 如果有至少2条对话记录，展示对应的网站
-      if (hasSuccessfulGeneratedMessage.value) {
+      const latestTask = await loadLatestGenerationTask()
+      if (latestTask?.status === 'failed') {
+        markRecentGeneration('failed')
+        previewUrl.value = ''
+        previewReady.value = false
+      } else if (hasSuccessfulGeneratedMessage.value && !latestTaskFailed.value) {
         updatePreview()
       }
       // 检查是否需要自动发送初始提示词

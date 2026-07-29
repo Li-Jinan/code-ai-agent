@@ -8,6 +8,7 @@ import {
   listMyAppVoByPage,
   listGoodAppVoByPage,
   listPublicDeployedAppVoByPage,
+  getLatestGenerationTask,
 } from '@/api/appController'
 import { getDeployUrl } from '@/config/env'
 import AppCard from '@/components/AppCard.vue'
@@ -218,7 +219,7 @@ const saveRecentGeneration = (record: RecentGeneration) => {
   localStorage.setItem(RECENT_GENERATION_KEY, JSON.stringify(record))
 }
 
-const loadRecentGeneration = () => {
+const loadRecentGeneration = async () => {
   const raw = localStorage.getItem(RECENT_GENERATION_KEY)
   if (!raw) {
     recentGeneration.value = null
@@ -226,10 +227,37 @@ const loadRecentGeneration = () => {
   }
   try {
     recentGeneration.value = JSON.parse(raw)
+    await refreshRecentGenerationStatus()
   } catch (error) {
     console.error('读取最近生成记录失败：', error)
     localStorage.removeItem(RECENT_GENERATION_KEY)
     recentGeneration.value = null
+  }
+}
+
+const refreshRecentGenerationStatus = async () => {
+  if (!recentGeneration.value?.appId || !isLoggedIn.value) {
+    return
+  }
+  try {
+    const res = await getLatestGenerationTask({ appId: recentGeneration.value.appId })
+    const task = res.data.data
+    if (!task?.status) {
+      return
+    }
+    const nextStatus: RecentGeneration['status'] =
+      task.status === 'succeeded'
+        ? 'preview-ready'
+        : task.status === 'failed'
+          ? 'failed'
+          : 'generating'
+    saveRecentGeneration({
+      ...recentGeneration.value,
+      status: nextStatus,
+      updatedAt: Date.now(),
+    })
+  } catch (error) {
+    console.error('刷新最近生成状态失败：', error)
   }
 }
 
