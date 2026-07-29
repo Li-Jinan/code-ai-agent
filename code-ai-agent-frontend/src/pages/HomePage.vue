@@ -14,6 +14,7 @@ const loginUserStore = useLoginUserStore()
 const userPrompt = ref('')
 const creating = ref(false)
 const isLoggedIn = computed(() => Boolean(loginUserStore.loginUser.id))
+const RECENT_GENERATION_KEY = 'code-ai-agent:recent-generation'
 
 // 我的应用数据
 const myApps = ref<API.AppVO[]>([])
@@ -30,6 +31,16 @@ const featuredAppsPage = reactive({
   pageSize: 6,
   total: 0,
 })
+
+interface RecentGeneration {
+  appId: string
+  prompt: string
+  appName: string
+  status: 'creating' | 'generating' | 'preview-ready'
+  updatedAt: number
+}
+
+const recentGeneration = ref<RecentGeneration | null>(null)
 
 const showcaseCases = [
   {
@@ -79,6 +90,23 @@ type ShowcaseCase = (typeof showcaseCases)[number]
 const showcaseDetailVisible = ref(false)
 const selectedShowcase = ref<ShowcaseCase | null>(null)
 
+const visibleMyApps = computed(() => {
+  if (!recentGeneration.value) {
+    return myApps.value
+  }
+  return myApps.value.filter((app) => String(app.id) !== recentGeneration.value?.appId)
+})
+
+const shouldShowRecentGeneration = computed(() => {
+  if (!isLoggedIn.value || !recentGeneration.value) {
+    return false
+  }
+  const oneDay = 24 * 60 * 60 * 1000
+  return Date.now() - recentGeneration.value.updatedAt < oneDay
+})
+
+const recommendationTitle = computed(() => (isLoggedIn.value ? '推荐生成案例' : '可生成案例'))
+
 // 设置提示词
 const setPrompt = (prompt: string) => {
   userPrompt.value = prompt
@@ -127,6 +155,13 @@ const createApp = async () => {
       message.success('应用创建成功')
       // 跳转到对话页面，确保ID是字符串类型
       const appId = String(res.data.data)
+      saveRecentGeneration({
+        appId,
+        prompt: userPrompt.value.trim(),
+        appName: userPrompt.value.trim().slice(0, 18) || '新建应用',
+        status: 'creating',
+        updatedAt: Date.now(),
+      })
       await router.push(`/app/chat/${appId}`)
     } else {
       message.error('创建失败：' + res.data.message)
@@ -136,6 +171,32 @@ const createApp = async () => {
     message.error('创建失败，请重试')
   } finally {
     creating.value = false
+  }
+}
+
+const saveRecentGeneration = (record: RecentGeneration) => {
+  recentGeneration.value = record
+  localStorage.setItem(RECENT_GENERATION_KEY, JSON.stringify(record))
+}
+
+const loadRecentGeneration = () => {
+  const raw = localStorage.getItem(RECENT_GENERATION_KEY)
+  if (!raw) {
+    recentGeneration.value = null
+    return
+  }
+  try {
+    recentGeneration.value = JSON.parse(raw)
+  } catch (error) {
+    console.error('读取最近生成记录失败：', error)
+    localStorage.removeItem(RECENT_GENERATION_KEY)
+    recentGeneration.value = null
+  }
+}
+
+const continueRecentGeneration = () => {
+  if (recentGeneration.value?.appId) {
+    router.push(`/app/chat/${recentGeneration.value.appId}`)
   }
 }
 
@@ -200,6 +261,7 @@ const viewWork = (app: API.AppVO) => {
 
 // 页面加载时获取数据
 onMounted(() => {
+  loadRecentGeneration()
   loadMyApps()
   loadFeaturedApps()
 
@@ -292,16 +354,36 @@ onMounted(() => {
 
       <!-- 我的作品 -->
       <div v-if="isLoggedIn" class="section">
-        <h2 class="section-title">我的作品</h2>
+        <div class="section-heading-row">
+          <h2 class="section-title">我的作品</h2>
+          <a-button type="link" class="section-action-button" @click="loadMyApps">刷新作品</a-button>
+        </div>
+        <div v-if="shouldShowRecentGeneration" class="recent-generation-card">
+          <div class="recent-generation-info">
+            <div class="recent-generation-kicker">最近创建</div>
+            <h3>{{ recentGeneration?.appName }}</h3>
+            <p>{{ recentGeneration?.prompt }}</p>
+            <div class="recent-generation-status">
+              <span class="status-dot"></span>
+              <span>作品可能仍在生成中，回来后可以继续查看进度或恢复生成。</span>
+            </div>
+          </div>
+          <a-button type="primary" @click="continueRecentGeneration">继续查看</a-button>
+        </div>
         <div class="app-grid">
           <AppCard
-            v-for="app in myApps"
+            v-for="app in visibleMyApps"
             :key="app.id"
             :app="app"
             @view-chat="viewChat"
             @view-work="viewWork"
           />
         </div>
+        <a-empty
+          v-if="myApps.length === 0"
+          class="empty-my-apps"
+          description="还没有作品。可以先从下方推荐案例挑一个模板开始。"
+        />
         <div class="pagination-wrapper">
           <a-pagination
             v-model:current="myAppsPage.current"
@@ -314,10 +396,13 @@ onMounted(() => {
         </div>
       </div>
 
-      <div v-else class="section showcase-section">
+      <div class="section showcase-section">
         <div class="section-heading-row">
-          <h2 class="section-title">可生成案例</h2>
-          <RouterLink class="section-action" to="/user/login">登录后开始创建</RouterLink>
+          <h2 class="section-title">{{ recommendationTitle }}</h2>
+          <RouterLink v-if="!isLoggedIn" class="section-action" to="/user/login">
+            登录后开始创建
+          </RouterLink>
+          <span v-else class="section-action">选择模板快速开始</span>
         </div>
         <div class="showcase-grid">
           <button
@@ -628,6 +713,83 @@ onMounted(() => {
 .section-action {
   color: #2f7d4b;
   font-weight: 600;
+}
+
+.section-action-button {
+  color: #2f7d4b;
+  font-weight: 600;
+}
+
+.recent-generation-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 22px;
+  padding: 22px 24px;
+  border: 1px solid rgba(47, 125, 75, 0.16);
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(47, 125, 75, 0.08), rgba(255, 255, 255, 0.94) 48%),
+    rgba(255, 255, 255, 0.94);
+  box-shadow: 0 14px 34px rgba(23, 58, 40, 0.1);
+}
+
+.recent-generation-info {
+  min-width: 0;
+}
+
+.recent-generation-kicker {
+  margin-bottom: 6px;
+  color: #2f7d4b;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.recent-generation-info h3 {
+  margin: 0 0 8px;
+  color: #173a28;
+  font-size: 20px;
+}
+
+.recent-generation-info p {
+  display: -webkit-box;
+  margin: 0 0 10px;
+  color: #617267;
+  line-height: 1.6;
+  overflow: hidden;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.recent-generation-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #4d6758;
+  font-size: 13px;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #2f7d4b;
+  box-shadow: 0 0 0 6px rgba(47, 125, 75, 0.12);
+}
+
+.recent-generation-card :deep(.ant-btn-primary) {
+  flex-shrink: 0;
+  background: #2f7d4b;
+  border-color: #2f7d4b;
+}
+
+.empty-my-apps {
+  margin: 18px 0 8px;
+  padding: 28px;
+  border: 1px dashed rgba(47, 125, 75, 0.18);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.62);
 }
 
 .showcase-grid {
@@ -1167,6 +1329,15 @@ onMounted(() => {
   .section-heading-row {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .recent-generation-card {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .recent-generation-card :deep(.ant-btn-primary) {
+    width: 100%;
   }
 
   .quick-actions {
