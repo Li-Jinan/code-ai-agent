@@ -14,7 +14,7 @@
       </div>
       <div class="app-overlay">
         <a-space>
-          <a-button type="primary" @click.stop="handleViewChat">查看对话</a-button>
+          <a-button v-if="showChat" type="primary" @click.stop="handleViewChat">查看对话</a-button>
           <a-button v-if="app.deployKey" type="default" @click.stop="handleViewWork">查看作品</a-button>
         </a-space>
       </div>
@@ -41,6 +41,7 @@ import { getAvatarUrl } from '@/utils/avatar'
 interface Props {
   app: API.AppVO
   featured?: boolean
+  showChat?: boolean
 }
 
 interface Emits {
@@ -50,6 +51,7 @@ interface Emits {
 
 const props = withDefaults(defineProps<Props>(), {
   featured: false,
+  showChat: true,
 })
 
 const emit = defineEmits<Emits>()

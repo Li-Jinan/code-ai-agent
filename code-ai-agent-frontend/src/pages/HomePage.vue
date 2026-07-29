@@ -3,7 +3,12 @@ import { computed, ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { useLoginUserStore } from '@/stores/loginUser'
-import { addApp, listMyAppVoByPage, listGoodAppVoByPage } from '@/api/appController'
+import {
+  addApp,
+  listMyAppVoByPage,
+  listGoodAppVoByPage,
+  listPublicDeployedAppVoByPage,
+} from '@/api/appController'
 import { getDeployUrl } from '@/config/env'
 import AppCard from '@/components/AppCard.vue'
 
@@ -29,6 +34,14 @@ const featuredApps = ref<API.AppVO[]>([])
 const featuredAppsPage = reactive({
   current: 1,
   pageSize: 6,
+  total: 0,
+})
+
+// 社区公开作品数据
+const publicApps = ref<API.AppVO[]>([])
+const publicAppsPage = reactive({
+  current: 1,
+  pageSize: 8,
   total: 0,
 })
 
@@ -95,6 +108,13 @@ const visibleMyApps = computed(() => {
     return myApps.value
   }
   return myApps.value.filter((app) => String(app.id) !== recentGeneration.value?.appId)
+})
+
+const visiblePublicApps = computed(() => {
+  if (!isLoggedIn.value) {
+    return publicApps.value
+  }
+  return publicApps.value.filter((app) => app.userId !== loginUserStore.loginUser.id)
 })
 
 const shouldShowRecentGeneration = computed(() => {
@@ -242,6 +262,25 @@ const loadFeaturedApps = async () => {
   }
 }
 
+// 加载社区公开作品
+const loadPublicApps = async () => {
+  try {
+    const res = await listPublicDeployedAppVoByPage({
+      pageNum: publicAppsPage.current,
+      pageSize: publicAppsPage.pageSize,
+      sortField: 'deployedTime',
+      sortOrder: 'descend',
+    })
+
+    if (res.data.code === 0 && res.data.data) {
+      publicApps.value = res.data.data.records || []
+      publicAppsPage.total = res.data.data.totalRow || 0
+    }
+  } catch (error) {
+    console.error('加载社区作品失败：', error)
+  }
+}
+
 // 查看对话
 const viewChat = (appId: string | number | undefined) => {
   if (appId) {
@@ -264,6 +303,7 @@ onMounted(() => {
   loadRecentGeneration()
   loadMyApps()
   loadFeaturedApps()
+  loadPublicApps()
 
   // 鼠标跟随光效
   const handleMouseMove = (e: MouseEvent) => {
@@ -430,6 +470,33 @@ onMounted(() => {
               </div>
             </div>
           </button>
+        </div>
+      </div>
+
+      <div v-if="visiblePublicApps.length > 0" class="section">
+        <div class="section-heading-row">
+          <h2 class="section-title">社区作品</h2>
+          <span class="section-action">看看其他用户已经部署的效果</span>
+        </div>
+        <div class="featured-grid">
+          <AppCard
+            v-for="app in visiblePublicApps"
+            :key="app.id"
+            :app="app"
+            :show-chat="false"
+            @view-chat="viewChat"
+            @view-work="viewWork"
+          />
+        </div>
+        <div class="pagination-wrapper">
+          <a-pagination
+            v-model:current="publicAppsPage.current"
+            v-model:page-size="publicAppsPage.pageSize"
+            :total="publicAppsPage.total"
+            :show-size-changer="false"
+            :show-total="(total: number) => `共 ${total} 个公开作品`"
+            @change="loadPublicApps"
+          />
         </div>
       </div>
 

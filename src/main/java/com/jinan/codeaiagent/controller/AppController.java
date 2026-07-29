@@ -287,6 +287,27 @@ public class AppController {
     }
 
     /**
+     * 分页获取公开已部署应用列表
+     *
+     * @param appQueryRequest 查询请求
+     * @return 公开应用列表
+     */
+    @PostMapping("/public/list/page/vo")
+    public BaseResponse<Page<AppVO>> listPublicDeployedAppVOByPage(@RequestBody AppQueryRequest appQueryRequest) {
+        ThrowUtils.throwIf(appQueryRequest == null, ErrorCode.PARAMS_ERROR);
+        long pageSize = appQueryRequest.getPageSize();
+        ThrowUtils.throwIf(pageSize > 20, ErrorCode.PARAMS_ERROR, "每页最多查询 20 个应用");
+        long pageNum = appQueryRequest.getPageNum();
+        QueryWrapper queryWrapper = appService.getQueryWrapper(appQueryRequest)
+                .ne("deployKey", "");
+        Page<App> appPage = appService.page(Page.of(pageNum, pageSize), queryWrapper);
+        Page<AppVO> appVOPage = new Page<>(pageNum, pageSize, appPage.getTotalRow());
+        List<AppVO> appVOList = appService.getAppVOList(appPage.getRecords());
+        appVOPage.setRecords(appVOList);
+        return ResultUtils.success(appVOPage);
+    }
+
+    /**
      * 管理员删除应用
      *
      * @param deleteRequest 删除请求

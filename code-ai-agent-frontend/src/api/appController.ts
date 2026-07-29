@@ -154,6 +154,21 @@ export async function listGoodAppVoByPage(
   })
 }
 
+/** 分页获取公开已部署应用列表 POST /app/public/list/page/vo */
+export async function listPublicDeployedAppVoByPage(
+  body: API.AppQueryRequest,
+  options?: { [key: string]: any }
+) {
+  return request<API.BaseResponsePageAppVO>('/app/public/list/page/vo', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    data: body,
+    ...(options || {}),
+  })
+}
+
 /** 此处后端没有提供注释 POST /app/my/list/page/vo */
 export async function listMyAppVoByPage(
   body: API.AppQueryRequest,
