@@ -8,7 +8,6 @@
         <div class="copy-points">
           <span>应用生成</span>
           <span>作品管理</span>
-          <span>邮箱验证码</span>
         </div>
       </div>
 

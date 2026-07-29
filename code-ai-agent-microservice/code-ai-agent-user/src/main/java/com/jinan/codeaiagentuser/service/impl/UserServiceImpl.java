@@ -28,6 +28,7 @@ import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.stream.Collectors;
 
 import static com.jinan.codeaiagent.constant.UserConstant.USER_LOGIN_STATE;
@@ -155,11 +156,6 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         if (StrUtil.isBlank(mailFrom)) {
             throw new BusinessException(ErrorCode.OPERATION_ERROR, "邮件发送账号未配置");
         }
-        QueryWrapper queryWrapper = QueryWrapper.create().eq("userEmail", userEmail);
-        User user = this.mapper.selectOneByQuery(queryWrapper);
-        if (user == null) {
-            throw new BusinessException(ErrorCode.PARAMS_ERROR, "邮箱未注册");
-        }
         String limitKey = EMAIL_CODE_LIMIT_KEY_PREFIX + userEmail;
         Boolean canSend = stringRedisTemplate.opsForValue()
                 .setIfAbsent(limitKey, "1", EMAIL_CODE_SEND_INTERVAL);
@@ -199,7 +195,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         QueryWrapper queryWrapper = QueryWrapper.create().eq("userEmail", userEmail);
         User user = this.mapper.selectOneByQuery(queryWrapper);
         if (user == null) {
-            throw new BusinessException(ErrorCode.PARAMS_ERROR, "用户不存在");
+            user = createEmailUser(userEmail);
         }
         stringRedisTemplate.delete(codeKey);
         request.getSession().setAttribute(USER_LOGIN_STATE, user);
@@ -295,5 +291,52 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
             return scene.substring(0, 20);
         }
         return scene;
+    }
+
+    private User createEmailUser(String userEmail) {
+        String normalizedEmail = userEmail.trim();
+        User user = new User();
+        user.setUserAccount(generateEmailUserAccount(normalizedEmail));
+        user.setUserEmail(normalizedEmail);
+        user.setUserPassword(getEncryptPassword(generateRandomPassword()));
+        user.setUserName(buildDefaultEmailUserName(normalizedEmail));
+        user.setUserAvatar(DEFAULT_USER_AVATAR);
+        user.setUserRole(UserRoleEnum.USER.getValue());
+        boolean saveResult = this.save(user);
+        if (!saveResult) {
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "账号创建失败，请稍后重试");
+        }
+        return user;
+    }
+
+    private String generateEmailUserAccount(String userEmail) {
+        String localPart = userEmail.substring(0, userEmail.indexOf('@'))
+                .toLowerCase(Locale.ROOT)
+                .replaceAll("[^a-z0-9_]", "");
+        String baseAccount = StrUtil.blankToDefault(localPart, "emailuser");
+        if (baseAccount.length() < 4) {
+            baseAccount = baseAccount + "user";
+        }
+        baseAccount = StrUtil.sub(baseAccount, 0, Math.min(baseAccount.length(), 20));
+        String candidate = baseAccount;
+        int retry = 0;
+        while (this.mapper.selectCountByQuery(QueryWrapper.create().eq("userAccount", candidate)) > 0) {
+            candidate = baseAccount + String.format("%04d", SECURE_RANDOM.nextInt(10000));
+            retry++;
+            if (retry > 10) {
+                candidate = "emailuser" + System.currentTimeMillis();
+                break;
+            }
+        }
+        return candidate;
+    }
+
+    private String buildDefaultEmailUserName(String userEmail) {
+        String localPart = userEmail.substring(0, userEmail.indexOf('@'));
+        return StrUtil.blankToDefault(localPart, DEFAULT_USER_NAME);
+    }
+
+    private String generateRandomPassword() {
+        return "Email@" + System.currentTimeMillis() + SECURE_RANDOM.nextInt(1000000);
     }
 }

@@ -15,6 +15,8 @@ import com.jinan.codeaiagent.exception.ThrowUtils;
 import com.jinan.codeaiagent.model.dto.user.*;
 import com.jinan.codeaiagent.model.vo.LoginUserVO;
 import com.jinan.codeaiagent.model.vo.UserVO;
+import com.jinan.codeaiagent.ratelimter.annotation.RateLimit;
+import com.jinan.codeaiagent.ratelimter.enums.RateLimitType;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -79,6 +81,13 @@ public class UserController {
      * 发送邮箱登录验证码
      */
     @PostMapping("/email/code")
+    @RateLimit(
+            key = "email-code",
+            limitType = RateLimitType.IP,
+            rate = 5,
+            rateInterval = 60,
+            message = "验证码发送请求过于频繁，请稍后再试"
+    )
     public BaseResponse<Boolean> sendEmailLoginCode(@RequestBody UserEmailCodeRequest userEmailCodeRequest) {
         ThrowUtils.throwIf(userEmailCodeRequest == null, ErrorCode.PARAMS_ERROR);
         boolean result = userService.sendEmailLoginCode(
