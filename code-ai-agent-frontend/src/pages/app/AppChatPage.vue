@@ -291,6 +291,14 @@ const isGenerating = ref(false)
 const messagesContainer = ref<HTMLElement>()
 const RECENT_GENERATION_KEY = 'code-ai-agent:recent-generation'
 
+interface RecentGeneration {
+  appId: string
+  prompt: string
+  appName: string
+  status: 'creating' | 'generating' | 'failed' | 'preview-ready'
+  updatedAt: number
+}
+
 // 对话历史相关
 const loadingHistory = ref(false)
 const hasMoreHistory = ref(false)
@@ -478,6 +486,8 @@ const fetchAppInfo = async () => {
           historyLoaded.value
       ) {
         await sendInitialMessage(appInfo.value.initPrompt)
+      } else {
+        await autoResumeGenerationIfNeeded()
       }
     } else {
       message.error('获取应用信息失败')
@@ -515,11 +525,11 @@ const sendInitialMessage = async (prompt: string) => {
   await generateCode(prompt, aiMessageIndex)
 }
 
-const markRecentGeneration = (status: 'creating' | 'generating' | 'preview-ready') => {
+const markRecentGeneration = (status: RecentGeneration['status']) => {
   if (!appId.value) {
     return
   }
-  const payload = {
+  const payload: RecentGeneration = {
     appId: String(appId.value),
     prompt: appInfo.value?.initPrompt || messages.value.find((item) => item.type === 'user')?.content || '',
     appName: appInfo.value?.appName || '新建应用',
@@ -527,6 +537,20 @@ const markRecentGeneration = (status: 'creating' | 'generating' | 'preview-ready
     updatedAt: Date.now(),
   }
   localStorage.setItem(RECENT_GENERATION_KEY, JSON.stringify(payload))
+}
+
+const getRecentGeneration = (): RecentGeneration | null => {
+  const raw = localStorage.getItem(RECENT_GENERATION_KEY)
+  if (!raw) {
+    return null
+  }
+  try {
+    return JSON.parse(raw)
+  } catch (error) {
+    console.error('读取最近生成记录失败：', error)
+    localStorage.removeItem(RECENT_GENERATION_KEY)
+    return null
+  }
 }
 
 const startGenerationTimer = () => {
@@ -565,6 +589,31 @@ const resumeLastGeneration = async () => {
   isGenerating.value = true
   markRecentGeneration('generating')
   await generateCode(lastUserMessage.content, aiMessageIndex)
+}
+
+const shouldAutoResumeGeneration = () => {
+  if (!isOwner.value || isGenerating.value || hasSuccessfulGeneratedMessage.value) {
+    return false
+  }
+  if (!canResumeGeneration.value) {
+    return false
+  }
+  if (route.query.autoResume === '1') {
+    return true
+  }
+  const recentGeneration = getRecentGeneration()
+  return (
+      recentGeneration?.appId === String(appId.value) &&
+      ['creating', 'generating', 'failed'].includes(recentGeneration.status)
+  )
+}
+
+const autoResumeGenerationIfNeeded = async () => {
+  if (!shouldAutoResumeGeneration()) {
+    return
+  }
+  await nextTick()
+  await resumeLastGeneration()
 }
 
 // 发送消息
@@ -704,6 +753,7 @@ const generateCode = async (userMessage: string, aiMessageIndex: number) => {
 
         streamCompleted = true
         isGenerating.value = false
+        markRecentGeneration('failed')
         previewUrl.value = ''
         previewReady.value = false
         stopGenerationTimer()
@@ -745,6 +795,7 @@ const handleError = (error: unknown, aiMessageIndex: number) => {
   messages.value[aiMessageIndex].loading = false
   message.error('生成失败，请重试')
   isGenerating.value = false
+  markRecentGeneration('failed')
   previewUrl.value = ''
   previewReady.value = false
   stopGenerationTimer()

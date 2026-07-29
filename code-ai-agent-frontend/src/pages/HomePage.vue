@@ -49,7 +49,7 @@ interface RecentGeneration {
   appId: string
   prompt: string
   appName: string
-  status: 'creating' | 'generating' | 'preview-ready'
+  status: 'creating' | 'generating' | 'failed' | 'preview-ready'
   updatedAt: number
 }
 
@@ -123,6 +123,25 @@ const shouldShowRecentGeneration = computed(() => {
   }
   const oneDay = 24 * 60 * 60 * 1000
   return Date.now() - recentGeneration.value.updatedAt < oneDay
+})
+
+const recentGenerationStatusText = computed(() => {
+  switch (recentGeneration.value?.status) {
+    case 'creating':
+      return '作品已创建，进入后会自动开始生成。'
+    case 'generating':
+      return '作品仍在生成中，进入后会自动恢复进度。'
+    case 'failed':
+      return '上一次生成失败，进入后会自动重试。'
+    case 'preview-ready':
+      return '作品已生成完成，可以继续查看和部署。'
+    default:
+      return '回来后可以继续查看进度或恢复生成。'
+  }
+})
+
+const recentGenerationActionText = computed(() => {
+  return recentGeneration.value?.status === 'preview-ready' ? '查看作品' : '继续生成'
 })
 
 const recommendationTitle = computed(() => (isLoggedIn.value ? '推荐生成案例' : '可生成案例'))
@@ -216,7 +235,8 @@ const loadRecentGeneration = () => {
 
 const continueRecentGeneration = () => {
   if (recentGeneration.value?.appId) {
-    router.push(`/app/chat/${recentGeneration.value.appId}`)
+    const autoResume = recentGeneration.value.status === 'preview-ready' ? '' : '?autoResume=1'
+    router.push(`/app/chat/${recentGeneration.value.appId}${autoResume}`)
   }
 }
 
@@ -405,10 +425,12 @@ onMounted(() => {
             <p>{{ recentGeneration?.prompt }}</p>
             <div class="recent-generation-status">
               <span class="status-dot"></span>
-              <span>作品可能仍在生成中，回来后可以继续查看进度或恢复生成。</span>
+              <span>{{ recentGenerationStatusText }}</span>
             </div>
           </div>
-          <a-button type="primary" @click="continueRecentGeneration">继续查看</a-button>
+          <a-button type="primary" @click="continueRecentGeneration">
+            {{ recentGenerationActionText }}
+          </a-button>
         </div>
         <div class="app-grid">
           <AppCard
