@@ -53,6 +53,12 @@
                     </template>
                     个人主页
                   </a-button>
+                  <a-button type="text" block class="dropdown-action" @click="goProfileWorks">
+                    <template #icon>
+                      <AppstoreOutlined />
+                    </template>
+                    我的作品
+                  </a-button>
                   <a-button type="text" block class="dropdown-action" @click="openProfileModal">
                     <template #icon>
                       <EditOutlined />
@@ -124,7 +130,13 @@ import { useRouter } from 'vue-router'
 import { type MenuProps, message, Modal } from 'ant-design-vue'
 import { useLoginUserStore } from '@/stores/loginUser.ts'
 import { updateMyUser, userLogout } from '@/api/userController.ts'
-import { LogoutOutlined, HomeOutlined, EditOutlined, UserOutlined } from '@ant-design/icons-vue'
+import {
+  AppstoreOutlined,
+  LogoutOutlined,
+  HomeOutlined,
+  EditOutlined,
+  UserOutlined,
+} from '@ant-design/icons-vue'
 import { getAvatarUrl } from '@/utils/avatar'
 
 const loginUserStore = useLoginUserStore()
@@ -233,6 +245,10 @@ const openProfileModal = () => {
 
 const goProfilePage = async () => {
   await router.push('/user/profile')
+}
+
+const goProfileWorks = async () => {
+  await router.push({ path: '/user/profile', hash: '#profileWorks' })
 }
 
 const saveProfile = async () => {

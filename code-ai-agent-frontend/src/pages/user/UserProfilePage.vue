@@ -120,7 +120,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { updateMyUser } from '@/api/userController.ts'
@@ -248,6 +248,10 @@ onMounted(async () => {
   }
   syncProfileForm()
   loadMyApps()
+  if (router.currentRoute.value.hash === '#profileWorks') {
+    await nextTick()
+    scrollToWorks()
+  }
 })
 </script>
 
