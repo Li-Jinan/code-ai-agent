@@ -126,7 +126,10 @@ public class JsonMessageStreamHandler {
 
     private String getFriendlyGenerationErrorMessage(Throwable error) {
         String message = error == null ? "" : error.getMessage();
-        if (message != null && (message.contains("JsonParseException") || message.contains("Unexpected character"))) {
+        if (message != null && StrUtil.containsAny(message, "Messages with role", "tool_calls", "invalid_request_error")) {
+            return "生成上下文异常，请点击重试。";
+        }
+        if (message != null && StrUtil.containsAny(message, "JsonParseException", "Unexpected character")) {
             return "AI 返回格式异常，请点击重试。";
         }
         return "生成过程中出现异常，请点击重试。";

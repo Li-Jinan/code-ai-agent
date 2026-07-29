@@ -129,7 +129,8 @@ public class GenerationTaskServiceImpl extends ServiceImpl<GenerationTaskMapper,
     }
 
     private boolean isFailureMessage(String message) {
-        return StrUtil.containsAny(message, "AI回复失败", "生成失败", "JsonParseException", "Unexpected character", "系统错误");
+        return StrUtil.containsAny(message, "AI回复失败", "生成失败", "JsonParseException", "Unexpected character",
+                "系统错误", "tool_calls", "Messages with role");
     }
 
     private boolean hasGeneratedArtifact(App app) {
@@ -186,13 +187,17 @@ public class GenerationTaskServiceImpl extends ServiceImpl<GenerationTaskMapper,
 
     private String getFriendlyErrorMessage(Throwable error) {
         String message = error == null ? "" : error.getMessage();
+        if (message != null && StrUtil.containsAny(message, "Messages with role", "tool_calls", "invalid_request_error")) {
+            return "生成上下文异常，请点击重试。";
+        }
+        if (message != null && StrUtil.containsAny(message, "JsonParseException", "Unexpected character")) {
+            return "AI 返回格式异常，请点击重试。";
+        }
         if (message != null && StrUtil.isNotBlank(message)
+                && !message.contains("{\"error\"")
                 && !message.contains("Exception")
                 && !message.contains("java.")) {
             return message;
-        }
-        if (message != null && (message.contains("JsonParseException") || message.contains("Unexpected character"))) {
-            return "AI 返回格式异常，请点击重试。";
         }
         return "生成过程中出现异常，请点击重试。";
     }

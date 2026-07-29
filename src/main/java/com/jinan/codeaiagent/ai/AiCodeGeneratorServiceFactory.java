@@ -89,24 +89,20 @@ public class AiCodeGeneratorServiceFactory {
      */
     private AiCodeGeneratorService createAiCodeGeneratorService(long appId, CodeGenTypeEnum codeGenType) {
         log.info("为 appId: {} 创建新的 AI 服务实例", appId);
-        // 根据 appId 构建独立的对话记忆
-        MessageWindowChatMemory chatMemory = MessageWindowChatMemory
-                .builder()
-                .id(appId)
-                .chatMemoryStore(redisChatMemoryStore)
-                .maxMessages(20)
-                .build();
-        // 从数据库中加载对话历史到记忆中
-        chatHistoryService.loadChatHistoryToMemory(appId, chatMemory, 20);
         return switch (codeGenType) {
             // Vue 项目生成，使用工具调用和推理模型
             case VUE_PROJECT -> {
                 // 使用多例模式的 StreamingChatModel 解决并发问题
                 StreamingChatModel reasoningStreamingChatModel = SpringContextUtil.getBean("reasoningStreamingChatModelPrototype", StreamingChatModel.class);
+                // 工具调用消息要求 tool 结果紧跟上一条 tool_calls。Vue 生成使用干净内存，避免重试/刷新后的持久化工具残片污染新请求。
+                MessageWindowChatMemory vueChatMemory = MessageWindowChatMemory.builder()
+                        .id(appId)
+                        .maxMessages(12)
+                        .build();
                 yield AiServices.builder(AiCodeGeneratorService.class)
                         .chatModel(chatModel)
                         .streamingChatModel(reasoningStreamingChatModel)
-                        .chatMemoryProvider(memoryId -> chatMemory)
+                        .chatMemoryProvider(memoryId -> vueChatMemory)
                         .tools(toolManager.getAllTools())
                         // 处理工具调用幻觉问题
                         .hallucinatedToolNameStrategy(toolExecutionRequest ->
@@ -122,6 +118,15 @@ public class AiCodeGeneratorServiceFactory {
             case HTML, MULTI_FILE -> {
                 // 使用多例模式的 StreamingChatModel 解决并发问题
                 StreamingChatModel openAiStreamingChatModel = SpringContextUtil.getBean("streamingChatModelPrototype", StreamingChatModel.class);
+                // 根据 appId 构建独立的对话记忆
+                MessageWindowChatMemory chatMemory = MessageWindowChatMemory
+                        .builder()
+                        .id(appId)
+                        .chatMemoryStore(redisChatMemoryStore)
+                        .maxMessages(20)
+                        .build();
+                // 从数据库中加载对话历史到记忆中
+                chatHistoryService.loadChatHistoryToMemory(appId, chatMemory, 20);
                 yield AiServices.builder(AiCodeGeneratorService.class)
                         .chatModel(chatModel)
                         .streamingChatModel(openAiStreamingChatModel)

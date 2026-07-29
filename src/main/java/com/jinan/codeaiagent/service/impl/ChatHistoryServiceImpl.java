@@ -170,6 +170,7 @@ public class ChatHistoryServiceImpl extends ServiceImpl<ChatHistoryMapper, ChatH
         if (StrUtil.isBlank(message)) {
             return false;
         }
-        return StrUtil.containsAny(message, "AI回复失败", "生成失败", "JsonParseException", "Unexpected character");
+        return StrUtil.containsAny(message, "AI回复失败", "生成失败", "JsonParseException", "Unexpected character",
+                "tool_calls", "Messages with role", "invalid_request_error");
     }
 }
