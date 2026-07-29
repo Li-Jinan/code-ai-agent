@@ -247,6 +247,8 @@ import {
   getAppVoById,
   deployApp as deployAppApi,
   deleteApp as deleteAppApi,
+  startGenerationTask,
+  getGenerationTask,
 } from '@/api/appController'
 import { listAppChatHistory } from '@/api/chatHistoryController'
 import { CodeGenTypeEnum, formatCodeGenType } from '@/utils/codeGenTypes'
@@ -256,7 +258,7 @@ import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
 import AppDetailModal from '@/components/AppDetailModal.vue'
 import DeploySuccessModal from '@/components/DeploySuccessModal.vue'
 import aiAvatar from '@/assets/treeAvatar.svg'
-import { API_BASE_URL, getStaticPreviewUrl } from '@/config/env'
+import { getStaticPreviewUrl } from '@/config/env'
 import { VisualEditor, type ElementInfo } from '@/utils/visualEditor'
 import { getAvatarUrl } from '@/utils/avatar'
 
@@ -317,9 +319,9 @@ const generationSteps = ['连接生成服务', 'AI 编写页面代码', '保存�
 const generationPhaseTitle = computed(() => generationSteps[generationStepIndex.value] || '正在生成网站')
 const generationPhaseDescription = computed(() => {
   const descriptions = [
-    '正在建立生成连接，请保持页面打开。',
-    '正在根据你的需求生成页面结构、样式和交互代码。',
-    '正在把生成结果保存为可预览的网站文件。',
+    '正在提交后台生成任务，离开此页也会继续执行。',
+    '后台正在根据你的需求生成页面结构、样式和交互代码。',
+    '后台正在保存网站文件并完成构建。',
     '正在刷新应用信息，预览马上会出现在右侧。',
   ]
   return descriptions[generationStepIndex.value] || descriptions[1]
@@ -667,123 +669,58 @@ const sendMessage = async () => {
   await generateCode(message, aiMessageIndex)
 }
 
-// 生成代码 - 使用 EventSource 处理流式响应
+// 生成代码 - 提交后台任务并轮询状态，页面离开后任务仍会在后端继续执行
 const generateCode = async (userMessage: string, aiMessageIndex: number) => {
-  let eventSource: EventSource | null = null
-  let streamCompleted = false
   generationStepIndex.value = 0
   startGenerationTimer()
 
   try {
-    // 获取 axios 配置的 baseURL
-    const baseURL = request.defaults.baseURL || API_BASE_URL
-
-    // 构建URL参数
-    const params = new URLSearchParams({
-      appId: appId.value || '',
+    messages.value[aiMessageIndex].content = '后台生成任务已启动，离开页面也会继续执行。'
+    const startRes = await startGenerationTask({
+      appId: appId.value,
       message: userMessage,
     })
 
-    const url = `${baseURL}/app/chat/gen/code?${params}`
-
-    // 创建 EventSource 连接
-    eventSource = new EventSource(url, {
-      withCredentials: true,
-    })
-
-    let fullContent = ''
-
-    // 处理接收到的消息
-    eventSource.onmessage = function (event) {
-      if (streamCompleted) return
-
-      try {
-        // 解析JSON包装的数据
-        const parsed = JSON.parse(event.data)
-        const content = parsed.d
-
-        // 拼接内容
-        if (content !== undefined && content !== null) {
-          fullContent += content
-          if (generationStepIndex.value < 1) {
-            generationStepIndex.value = 1
-          }
-          messages.value[aiMessageIndex].content = fullContent
-          messages.value[aiMessageIndex].loading = false
-          scrollToBottom()
-        }
-      } catch (error) {
-        console.error('解析消息失败:', error)
-        handleError(error, aiMessageIndex)
-      }
+    if (startRes.data.code !== 0 || !startRes.data.data?.id) {
+      throw new Error(startRes.data.message || '创建后台生成任务失败')
     }
 
-    // 处理done事件
-    eventSource.addEventListener('done', function () {
-      if (streamCompleted) return
+    const taskId = startRes.data.data.id
+    generationStepIndex.value = 1
 
-      streamCompleted = true
-      isGenerating.value = false
-      generationStepIndex.value = 2
-      stopGenerationTimer()
-      eventSource?.close()
-
-      // 延迟更新预览，确保后端已完成处理
-      setTimeout(async () => {
+    while (isGenerating.value) {
+      await new Promise((resolve) => window.setTimeout(resolve, 2000))
+      const taskRes = await getGenerationTask({ taskId })
+      const task = taskRes.data.data
+      if (task?.status === 'running') {
+        generationStepIndex.value = Math.max(generationStepIndex.value, 1)
+        messages.value[aiMessageIndex].content = '后台正在生成网站，离开页面后也会继续执行。'
+      } else if (task?.status === 'succeeded') {
         generationStepIndex.value = 3
+        isGenerating.value = false
+        messages.value[aiMessageIndex].loading = false
+        messages.value[aiMessageIndex].content = '生成完成，正在刷新右侧预览。'
+        stopGenerationTimer()
+        await loadChatHistory()
         await fetchAppInfo()
         updatePreview()
         markRecentGeneration('preview-ready')
-      }, 1000)
-    })
-
-    // 处理business-error事件（后端限流等错误）
-    eventSource.addEventListener('business-error', function (event: MessageEvent) {
-      if (streamCompleted) return
-
-      try {
-        const errorData = JSON.parse(event.data)
-        console.error('SSE业务错误事件:', errorData)
-
-        // 显示具体的错误信息
-        const errorMessage = errorData.message || '生成失败，请点击重试'
+        return
+      } else if (task?.status === 'failed') {
+        const errorMessage = task.errorMessage || '生成失败，请点击重试'
         messages.value[aiMessageIndex].content = `❌ ${errorMessage}`
         messages.value[aiMessageIndex].loading = false
         message.error(errorMessage)
-
-        streamCompleted = true
         isGenerating.value = false
         markRecentGeneration('failed')
         previewUrl.value = ''
         previewReady.value = false
         stopGenerationTimer()
-        eventSource?.close()
-      } catch (parseError) {
-        console.error('解析错误事件失败:', parseError, '原始数据:', event.data)
-        handleError(new Error('服务器返回错误'), aiMessageIndex)
-      }
-    })
-
-    // 处理错误
-    eventSource.onerror = function () {
-      if (streamCompleted || !isGenerating.value) return
-      // 检查是否是正常的连接关闭
-      if (eventSource?.readyState === EventSource.CONNECTING) {
-        streamCompleted = true
-        isGenerating.value = false
-        stopGenerationTimer()
-        eventSource?.close()
-
-        setTimeout(async () => {
-          await fetchAppInfo()
-          updatePreview()
-        }, 1000)
-      } else {
-        handleError(new Error('SSE连接错误'), aiMessageIndex)
+        return
       }
     }
   } catch (error) {
-    console.error('创建 EventSource 失败：', error)
+    console.error('后台生成任务失败：', error)
     handleError(error, aiMessageIndex)
   }
 }

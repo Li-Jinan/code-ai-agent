@@ -16,11 +16,13 @@ import com.jinan.codeaiagent.exception.ErrorCode;
 import com.jinan.codeaiagent.exception.ThrowUtils;
 import com.jinan.codeaiagent.model.dto.app.*;
 import com.jinan.codeaiagent.model.entity.User;
+import com.jinan.codeaiagent.model.entity.GenerationTask;
 import com.jinan.codeaiagent.model.vo.AppVO;
 import com.jinan.codeaiagent.ratelimter.annotation.RateLimit;
 import com.jinan.codeaiagent.ratelimter.enums.RateLimitType;
 import com.jinan.codeaiagent.service.ProjectDownloadService;
 import com.jinan.codeaiagent.service.UserService;
+import com.jinan.codeaiagent.service.GenerationTaskService;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -56,6 +58,9 @@ public class AppController {
 
     @Resource
     private ProjectDownloadService projectDownloadService;
+
+    @Resource
+    private GenerationTaskService generationTaskService;
 
     @GetMapping(value = "/chat/gen/code", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     @RateLimit(limitType = RateLimitType.USER, rate = 5, rateInterval = 60, message = "AI 对话请求过于频繁，请稍后再试")
@@ -104,6 +109,33 @@ public class AppController {
             return "AI 返回格式异常，请点击重试。";
         }
         return "生成过程中出现异常，请点击重试。";
+    }
+
+    @PostMapping("/chat/gen/task")
+    public BaseResponse<GenerationTask> startGenerationTask(@RequestBody GenerationTaskCreateRequest requestBody,
+                                                            HttpServletRequest request) {
+        ThrowUtils.throwIf(requestBody == null, ErrorCode.PARAMS_ERROR);
+        User loginUser = userService.getLoginUser(request);
+        GenerationTask task = generationTaskService.startGenerationTask(
+                requestBody.getAppId(),
+                requestBody.getMessage(),
+                loginUser
+        );
+        return ResultUtils.success(task);
+    }
+
+    @GetMapping("/chat/gen/task/{taskId}")
+    public BaseResponse<GenerationTask> getGenerationTask(@PathVariable Long taskId, HttpServletRequest request) {
+        User loginUser = userService.getLoginUser(request);
+        GenerationTask task = generationTaskService.getTask(taskId, loginUser);
+        return ResultUtils.success(task);
+    }
+
+    @GetMapping("/chat/gen/task/latest")
+    public BaseResponse<GenerationTask> getLatestGenerationTask(@RequestParam Long appId, HttpServletRequest request) {
+        User loginUser = userService.getLoginUser(request);
+        GenerationTask task = generationTaskService.getLatestTask(appId, loginUser);
+        return ResultUtils.success(task);
     }
 
     /**

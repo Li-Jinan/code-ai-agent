@@ -110,6 +110,9 @@ public class ChatHistoryServiceImpl extends ServiceImpl<ChatHistoryMapper, ChatH
                 if (ChatHistoryMessageTypeEnum.USER.getValue().equals(history.getMessageType())) {
                     chatMemory.add(UserMessage.from(history.getMessage()));
                 } else if (ChatHistoryMessageTypeEnum.AI.getValue().equals(history.getMessageType())) {
+                    if (isGenerationFailureMessage(history.getMessage())) {
+                        continue;
+                    }
                     chatMemory.add(AiMessage.from(history.getMessage()));
                 }
                 loadedCount++;
@@ -161,5 +164,12 @@ public class ChatHistoryServiceImpl extends ServiceImpl<ChatHistoryMapper, ChatH
             queryWrapper.orderBy("createTime", false);
         }
         return queryWrapper;
+    }
+
+    private boolean isGenerationFailureMessage(String message) {
+        if (StrUtil.isBlank(message)) {
+            return false;
+        }
+        return StrUtil.containsAny(message, "AI回复失败", "生成失败", "JsonParseException", "Unexpected character");
     }
 }

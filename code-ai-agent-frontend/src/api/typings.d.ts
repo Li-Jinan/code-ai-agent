@@ -49,6 +49,19 @@ declare namespace API {
     user?: UserVO
   }
 
+  type GenerationTask = {
+    id?: number
+    appId?: number
+    userId?: number
+    message?: string
+    status?: 'pending' | 'running' | 'succeeded' | 'failed'
+    errorMessage?: string
+    startTime?: string
+    finishTime?: string
+    createTime?: string
+    updateTime?: string
+  }
+
   type BaseResponseAppVO = {
     code?: number
     data?: AppVO
@@ -58,6 +71,12 @@ declare namespace API {
   type BaseResponseBoolean = {
     code?: number
     data?: boolean
+    message?: string
+  }
+
+  type BaseResponseGenerationTask = {
+    code?: number
+    data?: GenerationTask
     message?: string
   }
 

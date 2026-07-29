@@ -110,6 +110,45 @@ export async function deployApp(body: API.AppDeployRequest, options?: { [key: st
   })
 }
 
+/** 启动后台生成任务 POST /app/chat/gen/task */
+export async function startGenerationTask(
+  body: { appId?: number | string; message?: string },
+  options?: { [key: string]: any }
+) {
+  return request<API.BaseResponseGenerationTask>('/app/chat/gen/task', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    data: body,
+    ...(options || {}),
+  })
+}
+
+/** 获取生成任务 GET /app/chat/gen/task/${param0} */
+export async function getGenerationTask(
+  params: { taskId: number | string },
+  options?: { [key: string]: any }
+) {
+  const { taskId: param0 } = params
+  return request<API.BaseResponseGenerationTask>(`/app/chat/gen/task/${param0}`, {
+    method: 'GET',
+    ...(options || {}),
+  })
+}
+
+/** 获取应用最新生成任务 GET /app/chat/gen/task/latest */
+export async function getLatestGenerationTask(
+  params: { appId: number | string },
+  options?: { [key: string]: any }
+) {
+  return request<API.BaseResponseGenerationTask>('/app/chat/gen/task/latest', {
+    method: 'GET',
+    params,
+    ...(options || {}),
+  })
+}
+
 /** 此处后端没有提供注释 GET /app/download/${param0} */
 export async function downloadAppCode(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
