@@ -317,11 +317,39 @@ const generationPhaseDescription = computed(() => {
   return descriptions[generationStepIndex.value] || descriptions[1]
 })
 
+const isFailedAiMessage = (content?: string) => {
+  if (!content) {
+    return false
+  }
+  return (
+      content.includes('AI回复失败') ||
+      content.includes('生成失败') ||
+      content.includes('JsonParseException') ||
+      content.includes('Unexpected character') ||
+      content.includes('系统错误')
+  )
+}
+
+const normalizeAiHistoryMessage = (content: string) => {
+  if (!isFailedAiMessage(content)) {
+    return content
+  }
+  return '❌ 生成失败：AI 返回格式异常，请点击重试。'
+}
+
+const hasSuccessfulGeneratedMessage = computed(() => {
+  return messages.value.some((item) => item.type === 'ai' && item.content && !isFailedAiMessage(item.content))
+})
+
 const canResumeGeneration = computed(() => {
   if (!isOwner.value || isGenerating.value || messages.value.length === 0) {
     return false
   }
-  return messages.value[messages.value.length - 1]?.type === 'user'
+  const lastMessage = messages.value[messages.value.length - 1]
+  if (lastMessage?.type === 'user') {
+    return true
+  }
+  return lastMessage?.type === 'ai' && isFailedAiMessage(lastMessage.content)
 })
 
 // 部署相关
@@ -383,7 +411,10 @@ const loadChatHistory = async (isLoadMore = false) => {
         const historyMessages: Message[] = chatHistories
             .map((chat) => ({
               type: (chat.messageType === 'user' ? 'user' : 'ai') as 'user' | 'ai',
-              content: chat.message || '',
+              content:
+                  chat.messageType === 'ai'
+                      ? normalizeAiHistoryMessage(chat.message || '')
+                      : chat.message || '',
               createTime: chat.createTime,
             }))
             .reverse() // 反转数组，让老消息在前
@@ -435,7 +466,7 @@ const fetchAppInfo = async () => {
       // 先加载对话历史
       await loadChatHistory()
       // 如果有至少2条对话记录，展示对应的网站
-      if (messages.value.length >= 2) {
+      if (hasSuccessfulGeneratedMessage.value) {
         updatePreview()
       }
       // 检查是否需要自动发送初始提示词
@@ -666,13 +697,15 @@ const generateCode = async (userMessage: string, aiMessageIndex: number) => {
         console.error('SSE业务错误事件:', errorData)
 
         // 显示具体的错误信息
-        const errorMessage = errorData.message || '生成过程中出现错误'
+        const errorMessage = errorData.message || '生成失败，请点击重试'
         messages.value[aiMessageIndex].content = `❌ ${errorMessage}`
         messages.value[aiMessageIndex].loading = false
         message.error(errorMessage)
 
         streamCompleted = true
         isGenerating.value = false
+        previewUrl.value = ''
+        previewReady.value = false
         stopGenerationTimer()
         eventSource?.close()
       } catch (parseError) {
@@ -708,10 +741,12 @@ const generateCode = async (userMessage: string, aiMessageIndex: number) => {
 // 错误处理函数
 const handleError = (error: unknown, aiMessageIndex: number) => {
   console.error('生成代码失败：', error)
-  messages.value[aiMessageIndex].content = '抱歉，生成过程中出现了错误，请重试。'
+  messages.value[aiMessageIndex].content = '❌ 生成失败：生成过程中出现异常，请点击重试。'
   messages.value[aiMessageIndex].loading = false
   message.error('生成失败，请重试')
   isGenerating.value = false
+  previewUrl.value = ''
+  previewReady.value = false
   stopGenerationTimer()
 }
 

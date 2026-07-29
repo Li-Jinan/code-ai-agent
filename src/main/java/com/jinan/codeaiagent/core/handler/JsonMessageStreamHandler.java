@@ -58,7 +58,8 @@ public class JsonMessageStreamHandler {
                 })
                 .doOnError(error -> {
                     // 如果AI回复失败，也要记录错误消息
-                    String errorMessage = "AI回复失败: " + error.getMessage();
+                    String errorMessage = "AI回复失败: " + getFriendlyGenerationErrorMessage(error);
+                    log.error("Vue 项目生成流处理失败: {}", error.getMessage(), error);
                     chatHistoryService.addChatMessage(appId, errorMessage, ChatHistoryMessageTypeEnum.AI.getValue(), loginUser.getId());
                 });
     }
@@ -97,7 +98,16 @@ public class JsonMessageStreamHandler {
             }
             case TOOL_EXECUTED -> {
                 ToolExecutedMessage toolExecutedMessage = JSONUtil.toBean(chunk, ToolExecutedMessage.class);
-                JSONObject jsonObject = JSONUtil.parseObj(toolExecutedMessage.getArguments());
+                JSONObject jsonObject;
+                try {
+                    jsonObject = JSONUtil.parseObj(toolExecutedMessage.getArguments());
+                } catch (Exception e) {
+                    log.warn("工具调用参数解析失败，toolName: {}, arguments: {}",
+                            toolExecutedMessage.getName(), toolExecutedMessage.getArguments(), e);
+                    String friendlyMessage = "生成失败：AI 返回的工具参数格式异常，请点击重试。";
+                    chatHistoryStringBuilder.append(friendlyMessage);
+                    return friendlyMessage;
+                }
                 // 根据工具名称获取工具实例
                 String toolName = toolExecutedMessage.getName();
                 BaseTool tool = toolManager.getTool(toolName);
@@ -112,5 +122,13 @@ public class JsonMessageStreamHandler {
                 return "";
             }
         }
+    }
+
+    private String getFriendlyGenerationErrorMessage(Throwable error) {
+        String message = error == null ? "" : error.getMessage();
+        if (message != null && (message.contains("JsonParseException") || message.contains("Unexpected character"))) {
+            return "AI 返回格式异常，请点击重试。";
+        }
+        return "生成过程中出现异常，请点击重试。";
     }
 } 

@@ -30,6 +30,7 @@ import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.web.bind.annotation.*;
 import com.jinan.codeaiagent.model.entity.App;
 import com.jinan.codeaiagent.service.AppService;
+import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
@@ -44,6 +45,7 @@ import java.util.Map;
  */
 @RestController
 @RequestMapping("/app")
+@Slf4j
 public class AppController {
 
     @Resource
@@ -75,6 +77,18 @@ public class AppController {
                             .data(jsonData)
                             .build();
                 })
+                .onErrorResume(error -> {
+                    log.error("生成代码 SSE 流异常，appId: {}", appId, error);
+                    Map<String, Object> errorData = Map.of(
+                            "error", true,
+                            "code", ErrorCode.SYSTEM_ERROR.getCode(),
+                            "message", getFriendlyGenerationErrorMessage(error)
+                    );
+                    return Flux.just(ServerSentEvent.<String>builder()
+                            .event("business-error")
+                            .data(JSONUtil.toJsonStr(errorData))
+                            .build());
+                })
                 .concatWith(Mono.just(
                         // 发送结束事件
                         ServerSentEvent.<String>builder()
@@ -82,6 +96,14 @@ public class AppController {
                                 .data("")
                                 .build()
                 ));
+    }
+
+    private String getFriendlyGenerationErrorMessage(Throwable error) {
+        String message = error == null ? "" : error.getMessage();
+        if (message != null && (message.contains("JsonParseException") || message.contains("Unexpected character"))) {
+            return "AI 返回格式异常，请点击重试。";
+        }
+        return "生成过程中出现异常，请点击重试。";
     }
 
     /**
