@@ -75,6 +75,9 @@ public class AiCodeGeneratorServiceFactory {
      * @return
      */
     public AiCodeGeneratorService getAiCodeGeneratorService(long appId, CodeGenTypeEnum codeGenType) {
+        if (codeGenType == CodeGenTypeEnum.VUE_PROJECT) {
+            return createAiCodeGeneratorService(appId, codeGenType);
+        }
         String cacheKey = buildCacheKey(appId, codeGenType);
         return serviceCache.get(cacheKey, key -> createAiCodeGeneratorService(appId, codeGenType));
     }
