@@ -1,79 +1,177 @@
 # AI 代码生成与智能体应用平台
 
-> 基于 Spring AI + Spring Boot + RAG + 工具调用 + MCP 构建的多模型 AI 智能体应用。系统支持 ReAct 自主思考、多轮对话隔离、记忆持久化、RAG 知识库检索、结构化输出、Prompt 优化、工具调用和 MCP 服务接入。
+> 基于 LLM + LangChain4j + LangGraph4j + Tool Calling + SSE 构建的 AI 代码生成 Agent 平台。系统支持用户输入需求后生成应用代码，并提供生成过程流式展示、文件工具调用、在线预览、代码下载和部署发布能力。
 
-本项目来自简历项目「AI Agent 智能体对话应用开发」，建设周期为 2025 年 10 月至 2025 年 12 月。项目面向 AI 应用开发场景，目标是让智能体能够在多轮对话中自主规划、调用工具、检索知识库并完成复杂任务。
+## 项目定位
 
-## 在线访问
+本项目面向 AI 应用工程与 Agent 工程场景，目标不是做一个单纯的聊天机器人，而是将 LLM 能力接入到真实的代码生成工作流中：
+
+```text
+用户需求
+ -> 前端发起 SSE 对话
+ -> 后端创建应用级 AI 服务
+ -> Agent / Workflow 规划生成流程
+ -> Tool Calling 执行文件读写与项目构建
+ -> 生成应用代码
+ -> 在线预览 / 下载 / 部署
+```
+
+在线访问：
 
 | 类型 | 地址 |
 | --- | --- |
 | 前端应用 | [http://124.221.85.117](http://124.221.85.117) |
 | 接口文档 | [http://124.221.85.117/api/doc.html#/home](http://124.221.85.117/api/doc.html#/home) |
 
-## 项目亮点
+## 核心能力
 
-- 已完成前后端分离部署：Vue 3 静态资源由 Nginx 托管，后端 Spring Boot Jar 以生产环境配置启动。
-- 接入 MySQL / Redis，支持用户、应用、对话历史等核心数据持久化与缓存能力。
-- 接入 AI Key，支持根据用户提示词创建应用并生成可预览页面。
-- 提供接口文档，便于调试、联调和展示后端接口能力。
-- 支持生成应用后的页面预览、代码下载和部署操作，形成从需求输入到作品发布的完整闭环。
-- 基于 ReAct 模式实现自主思考与工具调用，支持复杂任务拆解和执行过程流式输出。
-- 通过 RAG、Tool Calling、MCP 和 Human-in-the-Loop 架构增强智能体的可用性和稳定性。
+- **AI 代码生成**：支持 HTML、多文件和 Vue 项目等生成类型，将用户需求转换为可预览的应用代码。
+- **Agent 工具调用**：封装文件读取、写入、修改、删除、目录读取和退出工具，支持 Agent 在受控范围内操作项目文件。
+- **工作流编排**：基于 LangGraph4j 编排提示词增强、代码生成、质量检查、图片资源收集和项目构建等节点。
+- **流式响应**：通过 SSE 实时返回生成过程，前端同步展示模型输出、工具执行和生成状态。
+- **上下文记忆**：基于 Redis ChatMemory 保存应用级对话上下文，并加载历史消息恢复会话。
+- **服务实例缓存**：基于 Caffeine 缓存 AI 服务实例，降低频繁创建服务对象的开销。
+- **结果闭环**：支持生成结果在线预览、应用代码下载、部署发布和后台管理。
 
 ## 技术栈
 
 | 模块 | 技术 |
 | --- | --- |
 | 前端 | Vue 3、TypeScript、Vite、Ant Design Vue、Pinia、Axios |
-| 后端 | Spring Boot、Spring AI、MyBatis-Plus、LangChain4j、Knife4j |
-| AI 能力 | RAG、Tool Calling、MCP、ReAct、Advisor、Prompt 优化 |
-| 存储 | MySQL、Redis、Caffeine、PgVector |
-| 部署 | Nginx、Jar 进程部署、Serverless、生产环境配置 |
+| 后端 | Spring Boot、MyBatis-Flex、Knife4j、Redisson、Caffeine |
+| AI 能力 | LangChain4j、LangGraph4j、Tool Calling、SSE、ChatMemory |
+| 存储 | MySQL、Redis、COS / 本地文件存储 |
+| 部署 | Nginx、Jar 进程部署、前后端分离部署 |
 
-## 简历亮点
+## 核心链路
 
-- 基于 Spring AI 统一接入灵积与本地部署 Ollama，构建多模型可切换策略，在保证模型能力的同时将 API 调用成本降低 50%。
-- 基于 Spring AI ChatMemory + Advisor 实现多轮对话记忆体系，结合 Caffeine 预加载历史会话数据，在高并发场景下将上下文命中率提升至 95%，平均响应延迟降低 30%。
-- 构建 MySQL + Redis 分层持久化架构，引入 Kryo 序列化，使序列化体积减少 60%、读写性能提升 2-3 倍，重启后上下文恢复率达 99%。
-- 搭建完整 RAG 知识检索体系，完成文档 ETL、PgVector 向量存储、多查询扩展与查询重写，使知识问答准确率提升 45%。
-- 集成 6 类工具调用并设计统一注册与调度机制，结合 ToolContext 实现用户身份传递与参数校验，避免无效执行并提升系统稳定性。
-- 开发支持 Stdio 与 SSE 双传输模式的 MCP 图片搜索服务并采用 Serverless 部署，降低跨项目接入成本 50%。
-- 基于 OpenManus 引入 Human-in-the-Loop 架构，并增加步数限制与死循环检测机制，使系统异常中断率下降 80%。
-- 通过 SseEmitter + CompletableFuture 实现流式输出与异步推理架构，实时输出执行过程，使用户等待感知时间减少 80%。
+### 1. 应用创建与对话生成
 
-## 功能展示
+用户创建应用后，在应用对话页输入需求。前端通过 SSE 请求后端接口：
 
-> 真实截图建议统一放在 `docs/screenshots/` 目录。当前先放置展示占位图，等截图文件补齐后可直接替换为真实页面截图。
+```text
+GET /app/chat/gen/code
+```
 
-### 首页
+后端根据 `appId` 和生成类型创建或复用 AI 服务实例，并将生成过程以流式事件返回前端。
 
-![首页](docs/screenshots/home.svg)
+相关代码：
 
-### 登录成功
+- `AppController#chatToGenCode`
+- `AppServiceImpl#chatToGenCode`
+- `AiCodeGeneratorServiceFactory`
 
-![登录成功](docs/screenshots/login-success.svg)
+### 2. AI 服务与上下文管理
 
-### 创建应用成功
+系统按应用维度创建 AI 服务，并使用 Redis ChatMemory 保存对话上下文。为了减少重复构建服务实例，使用 Caffeine 按 `appId + codeGenType` 缓存 AI 服务。
 
-![创建应用成功](docs/screenshots/create-app-success.svg)
+关键设计：
 
-### AI 生成页面
+- 每个应用维护独立对话记忆，避免不同应用上下文串扰。
+- 启动 AI 服务时加载历史会话，支持用户继续迭代同一个应用。
+- 对 Vue 项目生成模式启用工具调用，让 Agent 可以操作文件系统。
 
-![AI 生成页面](docs/screenshots/app-generating.svg)
+相关代码：
 
-### 生成结果预览
+- `AiCodeGeneratorServiceFactory`
+- `RedisChatMemoryStoreConfig`
+- `ChatHistoryServiceImpl`
 
-![生成结果预览](docs/screenshots/generated-preview.svg)
+### 3. 工具调用与文件操作
 
-## 部署记录
+项目将文件系统操作封装为工具，并通过 `ToolManager` 统一注册。Agent 在生成 Vue 项目时可以按需调用工具完成代码写入、修改、读取目录等动作。
 
-- 前端：构建 `dist` 后通过 Nginx 托管静态资源。
-- 后端：使用生产环境配置启动 Spring Boot Jar。
-- 反向代理：Nginx 将 `/api` 请求转发到后端服务。
-- 数据服务：MySQL 保存业务数据，Redis 提供缓存支持。
-- 文档入口：Knife4j 接口文档已通过线上地址访问。
+已封装工具：
+
+- `FileReadTool`：读取文件内容
+- `FileWriteTool`：写入文件
+- `FileModifyTool`：修改文件内容
+- `FileDeleteTool`：删除文件
+- `FileDirReadTool`：读取目录结构
+- `ExitTool`：任务完成后退出工具调用循环
+
+相关代码：
+
+- `ToolManager`
+- `BaseTool`
+- `FileWriteTool`
+- `FileModifyTool`
+- `ExitTool`
+
+### 4. 工作流编排
+
+项目引入 LangGraph4j，将复杂代码生成过程拆成多个节点，便于表达 Agent 执行状态和后续扩展。
+
+典型节点：
+
+- `PromptEnhancerNode`：优化用户需求
+- `RouterNode`：判断生成路径
+- `CodeGeneratorNode`：生成核心代码
+- `CodeQualityCheckNode`：检查生成质量
+- `ImageCollectorNode`：收集页面素材
+- `ProjectBuilderNode`：构建项目结果
+
+相关代码：
+
+- `CodeGenWorkflow`
+- `CodeGenConcurrentWorkflow`
+- `CodeGenSubgraphWorkflow`
+- `WorkflowContext`
+- `WorkflowSseController`
+
+### 5. 预览、下载与部署
+
+代码生成完成后，系统将生成结果保存到指定目录，前端可通过 iframe 预览生成页面。用户也可以下载完整代码包，或将应用部署到静态资源目录并获得访问链接。
+
+相关接口：
+
+```text
+GET  /app/download/{appId}
+POST /app/deploy
+GET  /static/{deployKey}/**
+```
+
+相关代码：
+
+- `ProjectDownloadServiceImpl`
+- `StaticResourceController`
+- `AppServiceImpl#deployApp`
+
+## 项目结构
+
+```text
+code-ai-agent
+├── code-ai-agent-frontend        # Vue 3 前端
+├── src/main/java/com/jinan/codeaiagent
+│   ├── ai                         # AI 服务、工具和护栏
+│   ├── controller                 # 应用、用户、历史记录、SSE 接口
+│   ├── core                       # 代码解析、保存、流式处理
+│   ├── langgraph4j                # Agent 工作流编排
+│   ├── model                      # DTO、VO、实体和枚举
+│   ├── service                    # 业务服务
+│   └── monitor                    # AI 调用监控与指标采集
+└── code-ai-agent-microservice     # 微服务拆分版本
+```
+
+## 本地启动
+
+后端：
+
+```bash
+mvn clean package -DskipTests
+java -jar target/code-ai-agent-0.0.1-SNAPSHOT.jar
+```
+
+前端：
+
+```bash
+cd code-ai-agent-frontend
+npm install
+npm run dev
+```
+
+启动前需要按环境配置 MySQL、Redis、模型 Key、对象存储等参数。
 
 ## 适合简历描述
 
-基于 Spring AI + Spring Boot + RAG + Tool Calling + MCP 构建多模型 AI 智能体应用，支持 ReAct 自主规划、多轮对话记忆、RAG 知识库检索、结构化输出、Prompt 优化、工具调用、MCP 图片搜索服务和流式响应，实现从用户任务输入到智能体规划执行的完整链路。
+基于 LangChain4j + LangGraph4j + Spring Boot 构建 AI 代码生成 Agent 平台，支持应用级对话记忆、工具调用、文件操作、SSE 流式生成、生成结果预览、代码下载和部署发布，实现从用户需求输入到应用生成交付的完整链路。
