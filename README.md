@@ -137,6 +137,42 @@ GET  /static/{deployKey}/**
 - `StaticResourceController`
 - `AppServiceImpl#deployApp`
 
+## 功能展示
+
+> 以下均为线上环境真实页面截图。
+
+### 首页
+
+#### 需求输入与模板入口
+
+![今安 AI 应用开发平台首页](docs/screenshots/home-hero.png)
+
+#### 可生成案例与社区作品
+
+![可生成案例与社区作品](docs/screenshots/home-showcases.png)
+
+### 登录与注册
+
+#### 账号密码登录
+
+![账号密码登录](docs/screenshots/login-password.png)
+
+#### 邮箱验证码登录 / 注册
+
+![邮箱验证码登录与注册](docs/screenshots/login-email.png)
+
+### 创建应用与 AI 生成过程
+
+![AI 正在生成页面](docs/screenshots/app-generating.png)
+
+### 生成结果预览
+
+![生成结果预览](docs/screenshots/generated-preview.png)
+
+### 可视化编辑模式
+
+![可视化编辑模式](docs/screenshots/generated-edit-mode.png)
+
 ## 项目结构
 
 ```text
