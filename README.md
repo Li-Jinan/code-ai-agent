@@ -1,141 +1,104 @@
-# AI 代码生成与智能体应用平台
+# 今安 AI 应用开发平台
 
-> 基于 LLM + LangChain4j + LangGraph4j + Tool Calling + SSE 构建的 AI 代码生成 Agent 平台。系统支持用户输入需求后生成应用代码，并提供生成过程流式展示、文件工具调用、在线预览、代码下载和部署发布能力。
+> 基于 Vue 3、Spring Boot、LangChain4j、Dubbo 与 Nacos 构建的微服务化 AI 代码生成平台。用户可以用自然语言描述需求，生成 HTML、多文件网站或 Vue 项目，并继续完成可视化修改、在线预览、源码下载与部署发布。
 
-## 项目定位
-
-本项目面向 AI 应用工程与 Agent 工程场景，目标不是做一个单纯的聊天机器人，而是将 LLM 能力接入到真实的代码生成工作流中：
-
-```text
-用户需求
- -> 前端发起 SSE 对话
- -> 后端创建应用级 AI 服务
- -> Agent / Workflow 规划生成流程
- -> Tool Calling 执行文件读写与项目构建
- -> 生成应用代码
- -> 在线预览 / 下载 / 部署
-```
-
-在线访问：
+## 在线体验
 
 | 类型 | 地址 |
 | --- | --- |
-| 前端应用 | [http://124.221.85.117](http://124.221.85.117) |
-| 接口文档 | [http://124.221.85.117/api/doc.html#/home](http://124.221.85.117/api/doc.html#/home) |
+| 在线应用 | [https://ai.lijinan.cn](https://ai.lijinan.cn) |
+| 接口文档 | [https://ai.lijinan.cn/api/doc.html#/home](https://ai.lijinan.cn/api/doc.html#/home) |
+| OpenAPI JSON | [https://ai.lijinan.cn/api/v3/api-docs](https://ai.lijinan.cn/api/v3/api-docs) |
+| GitHub 源码 | [Li-Jinan/code-ai-agent](https://github.com/Li-Jinan/code-ai-agent) |
+
+## 项目定位
+
+本项目面向 AI 应用工程与 Agent 工程场景，目标不是做一个通用聊天机器人，而是把大模型能力接入真实的网站生成工作流：
+
+```text
+用户输入网站需求
+ -> 创建应用并选择生成类型
+ -> AI 生成 HTML / 多文件网站 / Vue 项目
+ -> SSE 返回生成过程，Tool Calling 完成项目文件操作
+ -> 在线预览并通过对话或可视化选区继续修改
+ -> 下载源码 / 部署站点 / 生成作品封面
+```
+
+## 微服务架构
+
+当前主实现位于 `code-ai-agent-microservice`。其中 `app`、`user`、`screenshot` 是可独立运行的 Spring Boot 服务，`ai`、`client`、`model`、`common` 是供服务复用的 Maven 模块。
+
+```text
+Browser
+  └─ Vue 3 / Nginx
+       ├─ /api/user/** -> user-service (8124) -> MySQL / Redis
+       └─ /api/**      -> app-service  (8125) -> MySQL / Redis / AI
+                              ├─ Dubbo -> user-service
+                              └─ Dubbo -> screenshot-service (8127)
+                                             └─ Selenium -> Tencent COS
+
+app-service / user-service / screenshot-service -> Nacos
+```
+
+线上由 Nginx 提供统一入口：用户接口路由到 `user-service`，应用、对话、预览与接口文档路由到 `app-service`。服务间通过 Dubbo 调用，并使用 Nacos 完成注册与发现。
+
+### 模块职责
+
+| 模块 | 类型 | 主要职责 |
+| --- | --- | --- |
+| `code-ai-agent-app` | 独立服务 | 应用管理、对话历史、AI 生成编排、限流、预览、下载与部署 |
+| `code-ai-agent-user` | 独立服务 | 用户注册、登录、会话与用户管理，并向应用服务提供用户 RPC |
+| `code-ai-agent-screenshot` | 独立服务 | 通过 Selenium 生成部署页截图并上传腾讯云 COS |
+| `code-ai-agent-ai` | 共享模块 | LangChain4j 模型接入、代码生成服务、对话记忆、护栏与文件工具 |
+| `code-ai-agent-client` | 共享模块 | Dubbo 内部服务接口 |
+| `code-ai-agent-model` | 共享模块 | 实体、DTO、VO 与枚举 |
+| `code-ai-agent-common` | 共享模块 | 通用响应、异常、配置、常量与基础能力 |
 
 ## 核心能力
 
-- **AI 代码生成**：支持 HTML、多文件和 Vue 项目等生成类型，将用户需求转换为可预览的应用代码。
-- **Agent 工具调用**：封装文件读取、写入、修改、删除、目录读取和退出工具，支持 Agent 在受控范围内操作项目文件。
-- **工作流编排**：基于 LangGraph4j 编排提示词增强、代码生成、质量检查、图片资源收集和项目构建等节点。
-- **流式响应**：通过 SSE 实时返回生成过程，前端同步展示模型输出、工具执行和生成状态。
-- **上下文记忆**：基于 Redis ChatMemory 保存应用级对话上下文，并加载历史消息恢复会话。
-- **服务实例缓存**：基于 Caffeine 缓存 AI 服务实例，降低频繁创建服务对象的开销。
-- **结果闭环**：支持生成结果在线预览、应用代码下载、部署发布和后台管理。
+- **多类型代码生成**：根据需求生成单页 HTML、多文件网站或 Vue 项目，并自动选择合适的生成类型。
+- **流式生成反馈**：通过 SSE 实时返回模型输出和工具执行信息，前端同步展示生成过程。
+- **Agent 文件工具**：封装文件读取、写入、修改、删除、目录读取和退出工具，使 Vue 项目可以在受控目录内持续迭代。
+- **应用级上下文**：使用 Redis ChatMemory 隔离不同应用的上下文，并从 MySQL 对话历史恢复会话。
+- **可视化修改**：在预览区选择页面元素，将标签、选择器、文本和页面路径作为上下文继续生成。
+- **结果交付闭环**：支持 iframe 预览、源码压缩下载、站点部署和作品封面生成。
+- **服务治理**：基于 Nacos 与 Dubbo 完成服务注册、发现和 RPC，使用 Redis Session 共享登录态。
+- **稳定性设计**：使用 Redisson 进行用户级限流，使用 Caffeine 缓存应用级 AI 服务实例。
+
+## 核心链路
+
+### 1. 用户与会话
+
+Nginx 将 `/api/user/**` 路由到 `user-service`。用户服务负责注册、登录和用户管理，登录会话保存在 Redis；应用服务通过 Dubbo 获取用户信息。
+
+### 2. 创建应用与选择生成类型
+
+前端调用 `POST /api/app/add` 创建应用。应用服务根据初始需求选择 HTML、多文件或 Vue 项目生成模式，并在 MySQL 中保存应用信息。
+
+### 3. AI 对话生成
+
+前端通过 `GET /api/app/chat/gen/code` 发起生成请求。应用服务调用 `code-ai-agent-ai` 中的 LangChain4j 服务，以 SSE 返回生成过程；Vue 模式可通过 Tool Calling 直接操作项目文件。
+
+生成过程中会保存用户消息与 AI 回复，并按 `appId + codeGenType` 缓存 AI 服务实例，减少重复初始化开销。
+
+### 4. 预览、编辑与交付
+
+生成文件保存后，前端可在 iframe 中预览结果，也可以选中页面元素继续修改。用户还可以下载完整源码，或调用 `POST /api/app/deploy` 发布站点。
+
+### 5. 部署封面生成
+
+应用部署完成后，`app-service` 通过 Dubbo 调用 `screenshot-service`。截图服务使用 Selenium 访问部署页面，生成作品封面并上传到腾讯云 COS。
 
 ## 技术栈
 
 | 模块 | 技术 |
 | --- | --- |
 | 前端 | Vue 3、TypeScript、Vite、Ant Design Vue、Pinia、Axios |
-| 后端 | Spring Boot、MyBatis-Flex、Knife4j、Redisson、Caffeine |
-| AI 能力 | LangChain4j、LangGraph4j、Tool Calling、SSE、ChatMemory |
-| 存储 | MySQL、Redis、COS / 本地文件存储 |
-| 部署 | Nginx、Jar 进程部署、前后端分离部署 |
-
-## 核心链路
-
-### 1. 应用创建与对话生成
-
-用户创建应用后，在应用对话页输入需求。前端通过 SSE 请求后端接口：
-
-```text
-GET /app/chat/gen/code
-```
-
-后端根据 `appId` 和生成类型创建或复用 AI 服务实例，并将生成过程以流式事件返回前端。
-
-相关代码：
-
-- `AppController#chatToGenCode`
-- `AppServiceImpl#chatToGenCode`
-- `AiCodeGeneratorServiceFactory`
-
-### 2. AI 服务与上下文管理
-
-系统按应用维度创建 AI 服务，并使用 Redis ChatMemory 保存对话上下文。为了减少重复构建服务实例，使用 Caffeine 按 `appId + codeGenType` 缓存 AI 服务。
-
-关键设计：
-
-- 每个应用维护独立对话记忆，避免不同应用上下文串扰。
-- 启动 AI 服务时加载历史会话，支持用户继续迭代同一个应用。
-- 对 Vue 项目生成模式启用工具调用，让 Agent 可以操作文件系统。
-
-相关代码：
-
-- `AiCodeGeneratorServiceFactory`
-- `RedisChatMemoryStoreConfig`
-- `ChatHistoryServiceImpl`
-
-### 3. 工具调用与文件操作
-
-项目将文件系统操作封装为工具，并通过 `ToolManager` 统一注册。Agent 在生成 Vue 项目时可以按需调用工具完成代码写入、修改、读取目录等动作。
-
-已封装工具：
-
-- `FileReadTool`：读取文件内容
-- `FileWriteTool`：写入文件
-- `FileModifyTool`：修改文件内容
-- `FileDeleteTool`：删除文件
-- `FileDirReadTool`：读取目录结构
-- `ExitTool`：任务完成后退出工具调用循环
-
-相关代码：
-
-- `ToolManager`
-- `BaseTool`
-- `FileWriteTool`
-- `FileModifyTool`
-- `ExitTool`
-
-### 4. 工作流编排
-
-项目引入 LangGraph4j，将复杂代码生成过程拆成多个节点，便于表达 Agent 执行状态和后续扩展。
-
-典型节点：
-
-- `PromptEnhancerNode`：优化用户需求
-- `RouterNode`：判断生成路径
-- `CodeGeneratorNode`：生成核心代码
-- `CodeQualityCheckNode`：检查生成质量
-- `ImageCollectorNode`：收集页面素材
-- `ProjectBuilderNode`：构建项目结果
-
-相关代码：
-
-- `CodeGenWorkflow`
-- `CodeGenConcurrentWorkflow`
-- `CodeGenSubgraphWorkflow`
-- `WorkflowContext`
-- `WorkflowSseController`
-
-### 5. 预览、下载与部署
-
-代码生成完成后，系统将生成结果保存到指定目录，前端可通过 iframe 预览生成页面。用户也可以下载完整代码包，或将应用部署到静态资源目录并获得访问链接。
-
-相关接口：
-
-```text
-GET  /app/download/{appId}
-POST /app/deploy
-GET  /static/{deployKey}/**
-```
-
-相关代码：
-
-- `ProjectDownloadServiceImpl`
-- `StaticResourceController`
-- `AppServiceImpl#deployApp`
+| 后端 | Java 21、Spring Boot、MyBatis-Flex、Spring Session、Knife4j |
+| AI 能力 | LangChain4j、Tool Calling、SSE、Redis ChatMemory、输入护栏 |
+| 微服务 | Dubbo、Nacos、Nginx |
+| 数据与缓存 | MySQL、Redis、Redisson、Caffeine |
+| 文件与自动化 | 本地生成目录、腾讯云 COS、Selenium |
 
 ## 功能展示
 
@@ -177,28 +140,49 @@ GET  /static/{deployKey}/**
 
 ```text
 code-ai-agent
-├── code-ai-agent-frontend        # Vue 3 前端
-├── src/main/java/com/jinan/codeaiagent
-│   ├── ai                         # AI 服务、工具和护栏
-│   ├── controller                 # 应用、用户、历史记录、SSE 接口
-│   ├── core                       # 代码解析、保存、流式处理
-│   ├── langgraph4j                # Agent 工作流编排
-│   ├── model                      # DTO、VO、实体和枚举
-│   ├── service                    # 业务服务
-│   └── monitor                    # AI 调用监控与指标采集
-└── code-ai-agent-microservice     # 微服务拆分版本
+├── code-ai-agent-frontend              # Vue 3 前端
+├── code-ai-agent-microservice           # 当前微服务主实现
+│   ├── code-ai-agent-app                # 应用与 AI 生成服务
+│   ├── code-ai-agent-user               # 用户服务
+│   ├── code-ai-agent-screenshot         # 截图服务
+│   ├── code-ai-agent-ai                 # AI 能力与工具模块
+│   ├── code-ai-agent-client             # Dubbo 内部接口
+│   ├── code-ai-agent-model              # 公共数据模型
+│   └── code-ai-agent-common             # 公共基础模块
+├── docs/screenshots                     # README 真实页面截图
+└── src                                  # 原单体实现，保留用于演进对照
 ```
 
 ## 本地启动
 
-后端：
+### 环境要求
+
+- JDK 21、Maven、Node.js
+- MySQL、Redis、Nacos
+- 可用的模型 API Key
+- 如需生成部署封面，还需配置 Selenium 与腾讯云 COS
+
+请先为三个服务配置本地环境参数，不要将数据库密码、模型 Key 或 COS 密钥提交到 Git。
+
+### 后端
+
+构建全部微服务模块：
 
 ```bash
-mvn clean package -DskipTests
-java -jar target/code-ai-agent-0.0.1-SNAPSHOT.jar
+./mvnw -f code-ai-agent-microservice/pom.xml clean package -DskipTests
 ```
 
-前端：
+准备好 MySQL、Redis 与 Nacos 后，依次启动用户服务、截图服务和应用服务：
+
+```bash
+java -jar code-ai-agent-microservice/code-ai-agent-user/target/code-ai-agent-user-1.0-SNAPSHOT.jar
+java -jar code-ai-agent-microservice/code-ai-agent-screenshot/target/code-ai-agent-screenshot-1.0-SNAPSHOT.jar
+java -jar code-ai-agent-microservice/code-ai-agent-app/target/code-ai-agent-app-1.0-SNAPSHOT.jar
+```
+
+默认 HTTP 端口分别为 `8124`、`8127` 和 `8125`。
+
+### 前端
 
 ```bash
 cd code-ai-agent-frontend
@@ -206,8 +190,8 @@ npm install
 npm run dev
 ```
 
-启动前需要按环境配置 MySQL、Redis、模型 Key、对象存储等参数。
+## 项目名称与描述
 
-## 适合简历描述
+**项目名称：** 今安 AI 应用开发平台（`code-ai-agent`）
 
-基于 LangChain4j + LangGraph4j + Spring Boot 构建 AI 代码生成 Agent 平台，支持应用级对话记忆、工具调用、文件操作、SSE 流式生成、生成结果预览、代码下载和部署发布，实现从用户需求输入到应用生成交付的完整链路。
+**项目描述：** 基于 Spring Boot、LangChain4j、Dubbo 与 Nacos 构建的微服务化 AI 代码生成平台。系统将用户、应用生成与网页截图拆分为独立服务，支持自然语言生成 HTML、多文件网站和 Vue 项目，并通过应用级对话记忆、Tool Calling、SSE 流式反馈、可视化选区修改、在线预览、源码下载、站点部署和自动封面生成，形成从需求输入到应用交付的完整链路。
