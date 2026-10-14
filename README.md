@@ -1,6 +1,38 @@
-# 今安 AI 应用开发平台
+<div align="center">
+  <img src="code-ai-agent-frontend/src/assets/logo.png" width="88" alt="今安 AI 应用开发平台 Logo" />
+  <h1>今安 AI 应用开发平台</h1>
+  <p><strong>用自然语言生成、持续编辑并发布可运行的网站</strong></p>
+  <p>
+    <a href="https://ai.lijinan.cn">在线体验</a> ·
+    <a href="https://ai.lijinan.cn/api/doc.html#/home">接口文档</a> ·
+    <a href="#功能展示">功能展示</a> ·
+    <a href="#本地启动">本地运行</a>
+  </p>
+  <p>
+    <img src="https://img.shields.io/badge/Java-21-007396" alt="Java 21" />
+    <img src="https://img.shields.io/badge/Spring_Boot-3.5-6DB33F" alt="Spring Boot 3.5" />
+    <img src="https://img.shields.io/badge/Vue-3-42B883" alt="Vue 3" />
+    <img src="https://img.shields.io/badge/LangChain4j-AI-5B5FC7" alt="LangChain4j" />
+    <img src="https://img.shields.io/badge/Apache_Dubbo-3.3-2C73D2" alt="Apache Dubbo 3.3" />
+  </p>
+</div>
 
-> 基于 Vue 3、Spring Boot、LangChain4j、Dubbo 与 Nacos 构建的微服务化 AI 代码生成平台。用户可以用自然语言描述需求，生成 HTML、多文件网站或 Vue 项目，并继续完成可视化修改、在线预览、源码下载与部署发布。
+## 项目概览
+
+| 项目 | 内容 |
+| --- | --- |
+| 项目名称 | 今安 AI 应用开发平台（`code-ai-agent`） |
+| 项目定位 | 面向真实应用交付的微服务化 AI 网站生成平台，而不是通用聊天机器人 |
+| 生成模式 | 单页 HTML、多文件网站、Vue 项目 |
+| 完整链路 | 需求输入 → AI 生成 → 持续编辑 → 在线预览 → 源码下载 / 站点部署 |
+
+基于 Vue 3、Spring Boot、LangChain4j、Dubbo 与 Nacos 构建。用户可以用自然语言描述需求，生成可运行的网站项目，并通过 Tool Calling、应用级对话记忆和可视化选区继续迭代，最终完成预览、下载、部署与作品封面生成。
+
+## 项目亮点
+
+| 多模式生成 | 交互式迭代 | 完整交付闭环 |
+| --- | --- | --- |
+| 支持 HTML、多文件网站与 Vue 项目，按需求选择生成类型 | 通过 SSE 展示生成过程，结合 Tool Calling 和可视化选区持续修改 | 提供在线预览、源码下载、站点部署与自动封面生成 |
 
 ## 在线体验
 
@@ -8,39 +40,66 @@
 | --- | --- |
 | 在线应用 | [https://ai.lijinan.cn](https://ai.lijinan.cn) |
 | 接口文档 | [https://ai.lijinan.cn/api/doc.html#/home](https://ai.lijinan.cn/api/doc.html#/home) |
-| OpenAPI JSON | [https://ai.lijinan.cn/api/v3/api-docs](https://ai.lijinan.cn/api/v3/api-docs) |
 | GitHub 源码 | [Li-Jinan/code-ai-agent](https://github.com/Li-Jinan/code-ai-agent) |
 
-## 项目定位
+## 功能展示
 
-本项目面向 AI 应用工程与 Agent 工程场景，目标不是做一个通用聊天机器人，而是把大模型能力接入真实的网站生成工作流：
+> 以下均为线上环境真实页面截图。
 
-```text
-用户输入网站需求
- -> 创建应用并选择生成类型
- -> AI 生成 HTML / 多文件网站 / Vue 项目
- -> SSE 返回生成过程，Tool Calling 完成项目文件操作
- -> 在线预览并通过对话或可视化选区继续修改
- -> 下载源码 / 部署站点 / 生成作品封面
-```
+### 首页与需求输入
 
-## 微服务架构
+![今安 AI 应用开发平台首页](docs/screenshots/home-hero.png)
+
+### 首页案例与社区作品
+
+![可生成案例与社区作品](docs/screenshots/home-showcases.png)
+
+### 账号密码登录
+
+![账号密码登录](docs/screenshots/login-password.png)
+
+### 创建应用与 AI 生成过程
+
+![AI 正在生成页面](docs/screenshots/app-generating.png)
+
+### 生成结果预览
+
+![生成结果预览](docs/screenshots/generated-preview.png)
+
+### 可视化编辑模式
+
+![可视化编辑模式](docs/screenshots/generated-edit-mode.png)
+
+## 系统架构
 
 当前主实现位于 `code-ai-agent-microservice`。其中 `app`、`user`、`screenshot` 是可独立运行的 Spring Boot 服务，`ai`、`client`、`model`、`common` 是供服务复用的 Maven 模块。
 
-```text
-Browser
-  └─ Vue 3 / Nginx
-       ├─ /api/user/** -> user-service (8124) -> MySQL / Redis
-       └─ /api/**      -> app-service  (8125) -> MySQL / Redis / AI
-                              ├─ Dubbo -> user-service
-                              └─ Dubbo -> screenshot-service (8127)
-                                             └─ Selenium -> Tencent COS
+```mermaid
+flowchart LR
+    U[用户] --> FE[Vue 3 前端]
 
-app-service / user-service / screenshot-service -> Nacos
+    FE --> APP[app-service<br/>应用、对话、生成与交付]
+    FE --> USER[user-service<br/>注册、登录与用户管理]
+
+    APP --> AI[code-ai-agent-ai<br/>LangChain4j / Tool Calling]
+    AI --> LLM[大模型 API]
+
+    APP -- Dubbo --> USER
+    APP -- Dubbo --> SHOT[screenshot-service<br/>部署页截图]
+    SHOT --> SEL[Selenium]
+    SHOT --> COS[腾讯云 COS]
+
+    APP --> DB[(MySQL)]
+    USER --> DB
+    APP --> REDIS[(Redis)]
+    USER --> REDIS
+
+    APP -. 注册与发现 .-> NACOS[Nacos]
+    USER -. 注册与发现 .-> NACOS
+    SHOT -. 注册与发现 .-> NACOS
 ```
 
-线上由 Nginx 提供统一入口：用户接口路由到 `user-service`，应用、对话、预览与接口文档路由到 `app-service`。服务间通过 Dubbo 调用，并使用 Nacos 完成注册与发现。
+服务间通过 Dubbo 调用，并使用 Nacos 完成注册与发现；Redis 承担会话、对话记忆和限流等状态能力。
 
 ### 模块职责
 
@@ -69,7 +128,7 @@ app-service / user-service / screenshot-service -> Nacos
 
 ### 1. 用户与会话
 
-Nginx 将 `/api/user/**` 路由到 `user-service`。用户服务负责注册、登录和用户管理，登录会话保存在 Redis；应用服务通过 Dubbo 获取用户信息。
+用户服务负责注册、登录和用户管理，登录会话保存在 Redis；应用服务通过 Dubbo 获取用户信息。
 
 ### 2. 创建应用与选择生成类型
 
@@ -96,54 +155,18 @@ Nginx 将 `/api/user/**` 路由到 `user-service`。用户服务负责注册、�
 | 前端 | Vue 3、TypeScript、Vite、Ant Design Vue、Pinia、Axios |
 | 后端 | Java 21、Spring Boot、MyBatis-Flex、Spring Session、Knife4j |
 | AI 能力 | LangChain4j、Tool Calling、SSE、Redis ChatMemory、输入护栏 |
-| 微服务 | Dubbo、Nacos、Nginx |
+| 微服务 | Dubbo、Nacos |
 | 数据与缓存 | MySQL、Redis、Redisson、Caffeine |
 | 文件与自动化 | 本地生成目录、腾讯云 COS、Selenium |
-
-## 功能展示
-
-> 以下均为线上环境真实页面截图。
-
-### 首页
-
-#### 需求输入与模板入口
-
-![今安 AI 应用开发平台首页](docs/screenshots/home-hero.png)
-
-#### 可生成案例与社区作品
-
-![可生成案例与社区作品](docs/screenshots/home-showcases.png)
-
-### 登录与注册
-
-#### 账号密码登录
-
-![账号密码登录](docs/screenshots/login-password.png)
-
-#### 邮箱验证码登录 / 注册
-
-![邮箱验证码登录与注册](docs/screenshots/login-email.png)
-
-### 创建应用与 AI 生成过程
-
-![AI 正在生成页面](docs/screenshots/app-generating.png)
-
-### 生成结果预览
-
-![生成结果预览](docs/screenshots/generated-preview.png)
-
-### 可视化编辑模式
-
-![可视化编辑模式](docs/screenshots/generated-edit-mode.png)
 
 ## 项目结构
 
 ```text
 code-ai-agent
 ├── code-ai-agent-frontend              # Vue 3 前端
-├── code-ai-agent-microservice           # 当前微服务主实现
-│   ├── code-ai-agent-app                # 应用与 AI 生成服务
-│   ├── code-ai-agent-user               # 用户服务
+├── code-ai-agent-microservice          # 当前微服务主实现
+│   ├── code-ai-agent-app               # 应用与 AI 生成服务
+│   ├── code-ai-agent-user              # 用户服务
 │   ├── code-ai-agent-screenshot         # 截图服务
 │   ├── code-ai-agent-ai                 # AI 能力与工具模块
 │   ├── code-ai-agent-client             # Dubbo 内部接口
@@ -186,12 +209,11 @@ java -jar code-ai-agent-microservice/code-ai-agent-app/target/code-ai-agent-app-
 
 ```bash
 cd code-ai-agent-frontend
-npm install
+npm ci
 npm run dev
 ```
 
-## 项目名称与描述
+## 接口与开发
 
-**项目名称：** 今安 AI 应用开发平台（`code-ai-agent`）
-
-**项目描述：** 基于 Spring Boot、LangChain4j、Dubbo 与 Nacos 构建的微服务化 AI 代码生成平台。系统将用户、应用生成与网页截图拆分为独立服务，支持自然语言生成 HTML、多文件网站和 Vue 项目，并通过应用级对话记忆、Tool Calling、SSE 流式反馈、可视化选区修改、在线预览、源码下载、站点部署和自动封面生成，形成从需求输入到应用交付的完整链路。
+- 在线接口文档：[Knife4j](https://ai.lijinan.cn/api/doc.html#/home)
+- OpenAPI JSON：[https://ai.lijinan.cn/api/v3/api-docs](https://ai.lijinan.cn/api/v3/api-docs)
