@@ -41,9 +41,21 @@
 | Vue 工程生成可靠性 | 将 Vue 生成改为请求级会话内存，隔离 Redis 中残留的工具调用上下文，并识别工具调用协议异常 | [实现提交](https://github.com/Li-Jinan/code-ai-agent/commit/aa77392) |
 | 工具输出与上下文控制 | 目录读取跳过 `node_modules` 等大目录，限制条目数与输出长度，补充路径穿越校验和单元测试，避免工具输出撑爆上下文 | [实现提交](https://github.com/Li-Jinan/code-ai-agent/commit/ea5783b) |
 | 异步监控上下文传递 | 将流式回调跨线程后的监控上下文由 `ThreadLocal` 改为随模型请求 `attributes` 传递，并增加空值兜底 | [实现提交](https://github.com/Li-Jinan/code-ai-agent/commit/ea5783b) |
+| 任务心跳与时钟同源 | 心跳写入与过期判断统一使用 MySQL 时钟（`CURRENT_TIMESTAMP - INTERVAL n SECOND`），修复数据库与 JVM 时区不一致时新任务被误判超时并回收的问题；补充时区错位集成测试 | [集成测试](code-ai-agent-microservice/code-ai-agent-app/src/test/java/com/jinan/codeaiagent/service/impl/GenerationTaskMySqlIntegrationTest.java) |
 | 微服务部署与登录 | 以 Docker Compose 编排 MySQL、Redis、Nacos、Selenium 和三个 Dubbo 服务，增加健康检查、Nginx 统一入口、邮箱验证码登录与 IP 限流 | 本次合入 `main` |
 
-> 上述二次开发代码、测试、数据库迁移与部署文档均已合入 `main`。提交记录与测试用例可直接作为简历内容的核验依据。
+> 上述二次开发代码、测试、数据库迁移与部署文档均已合入 `main`。
+>
+> 生成任务的并发占位、心跳回收与时区错位行为由真实 MySQL 集成测试覆盖：在 MySQL 8.4 的 `UTC` 与 `+08:00` 两种时区下（JVM 为 Asia/Shanghai），`GenerationTaskMySqlIntegrationTest` 均为 4 通过、0 跳过。未传入 `mysql.it.url` 时该测试会自动跳过，复现方式：
+>
+> ```bash
+> cd code-ai-agent-microservice
+> mvn -pl code-ai-agent-app -am test -Dtest=GenerationTaskMySqlIntegrationTest -Dsurefire.failIfNoSpecifiedTests=false \
+>   "-Dmysql.it.url=jdbc:mysql://localhost:3306/generation_task_it?allowPublicKeyRetrieval=true&useSSL=false" \
+>   -Dmysql.it.username=root -Dmysql.it.password=<密码>
+> ```
+>
+> 测试库名必须为 `generation_task_it`，测试会自建并清空 `generation_task` 表。
 
 ## 项目亮点
 

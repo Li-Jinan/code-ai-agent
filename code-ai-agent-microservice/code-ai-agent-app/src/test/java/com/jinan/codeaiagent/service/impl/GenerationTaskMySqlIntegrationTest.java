@@ -20,8 +20,13 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -53,7 +58,10 @@ class GenerationTaskMySqlIntegrationTest {
     private static final int CONTENDER_COUNT = 10;
     private static final long APP_ID = 99001L;
     private static final long USER_ID = 99002L;
+    private static final long STALE_AFTER_SECONDS = 300L;
     private static SqlSessionFactory sqlSessionFactory;
+    /** 会话时区与 JVM 时区错开 8 小时，模拟数据库与应用时区不一致的部署。 */
+    private static SqlSessionFactory skewedSqlSessionFactory;
 
     @BeforeAll
     static void createSchema() throws SQLException {
@@ -82,6 +90,17 @@ class GenerationTaskMySqlIntegrationTest {
         configuration.setMapUnderscoreToCamelCase(true);
         configuration.addMapper(GenerationTaskMapper.class);
         sqlSessionFactory = new SqlSessionFactoryBuilder().build(configuration);
+
+        Properties skewedProperties = new Properties();
+        skewedProperties.setProperty("user", username());
+        skewedProperties.setProperty("password", password());
+        skewedProperties.setProperty("sessionVariables", "time_zone='" + skewedSessionTimeZone() + "'");
+        Configuration skewedConfiguration = new Configuration(new Environment("mysql-it-skewed",
+                new JdbcTransactionFactory(),
+                new UnpooledDataSource("com.mysql.cj.jdbc.Driver", jdbcUrl(), skewedProperties)));
+        skewedConfiguration.setMapUnderscoreToCamelCase(true);
+        skewedConfiguration.addMapper(GenerationTaskMapper.class);
+        skewedSqlSessionFactory = new SqlSessionFactoryBuilder().build(skewedConfiguration);
     }
 
     @AfterEach
@@ -238,6 +257,51 @@ class GenerationTaskMySqlIntegrationTest {
         assertNull(taskRunningAppId(taskId));
     }
 
+    @Test
+    void staleScanUsesDatabaseClockWhenSessionTimeZoneDiffersFromJvm() throws Exception {
+        long taskId = insertTask(APP_ID, "time zone skew");
+        try (SqlSession session = skewedSqlSessionFactory.openSession(true)) {
+            GenerationTaskMapper mapper = session.getMapper(GenerationTaskMapper.class);
+            assertEquals(1, mapper.touchHeartbeat(taskId));
+
+            LocalDateTime heartbeat;
+            try (Statement statement = session.getConnection().createStatement();
+                 ResultSet resultSet = statement.executeQuery(
+                         "SELECT heartbeat_time FROM generation_task WHERE id = " + taskId)) {
+                assertTrue(resultSet.next());
+                heartbeat = resultSet.getObject(1, LocalDateTime.class);
+            }
+            assertTrue(Duration.between(heartbeat, LocalDateTime.now()).abs().toHours() >= 1,
+                    "precondition: session clock must be skewed from the JVM clock");
+            assertFalse(mapper.selectStaleActiveTasks(STALE_AFTER_SECONDS).stream()
+                            .map(GenerationTask::getId).anyMatch(id -> id == taskId),
+                    "a fresh heartbeat must not look stale when MySQL and JVM time zones differ");
+            assertEquals(0, mapper.failIfStale(taskId, STALE_AFTER_SECONDS),
+                    "a fresh heartbeat must not be reclaimed when MySQL and JVM time zones differ");
+        }
+
+        try (SqlSession session = skewedSqlSessionFactory.openSession(true);
+             Statement statement = session.getConnection().createStatement()) {
+            statement.executeUpdate("UPDATE generation_task SET " +
+                    "heartbeat_time = CURRENT_TIMESTAMP - INTERVAL 6 MINUTE WHERE id = " + taskId);
+            GenerationTaskMapper mapper = session.getMapper(GenerationTaskMapper.class);
+            assertEquals(1, mapper.failIfStale(taskId, STALE_AFTER_SECONDS),
+                    "an expired heartbeat must still be reclaimed under a skewed session time zone");
+        }
+        assertEquals("failed", taskStatus(taskId));
+        assertNull(taskRunningAppId(taskId));
+    }
+
+    private static String skewedSessionTimeZone() {
+        int jvmOffsetSeconds = ZoneId.systemDefault().getRules().getOffset(Instant.now()).getTotalSeconds();
+        int skewed = jvmOffsetSeconds + 8 * 3600;
+        if (skewed > 14 * 3600) {
+            skewed -= 24 * 3600;
+        }
+        int abs = Math.abs(skewed);
+        return String.format("%s%02d:%02d", skewed < 0 ? "-" : "+", abs / 3600, (abs % 3600) / 60);
+    }
+
     private static Connection connection() throws SQLException {
         return DriverManager.getConnection(jdbcUrl(), username(), password());
     }
@@ -290,13 +354,11 @@ class GenerationTaskMySqlIntegrationTest {
     }
 
     private static int failIfStale(long taskId) throws SQLException {
-        return withMapper(mapper -> mapper.failIfStale(taskId,
-                java.time.LocalDateTime.now().minusMinutes(5)));
+        return withMapper(mapper -> mapper.failIfStale(taskId, STALE_AFTER_SECONDS));
     }
 
     private static Set<Long> selectStaleTaskIds() throws SQLException {
-        return withMapper(mapper -> mapper.selectStaleActiveTasks(
-                        java.time.LocalDateTime.now().minusMinutes(5)))
+        return withMapper(mapper -> mapper.selectStaleActiveTasks(STALE_AFTER_SECONDS))
                 .stream()
                 .map(GenerationTask::getId)
                 .collect(Collectors.toSet());

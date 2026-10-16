@@ -85,6 +85,8 @@ public class GenerationTaskServiceImpl extends ServiceImpl<GenerationTaskMapper,
                     "该应用已有生成任务正在排队或执行，请稍后重试");
         }
         ThrowUtils.throwIf(!saved, ErrorCode.OPERATION_ERROR, "创建生成任务失败");
+        // 入库时的心跳来自 JVM 时钟，立即用数据库时钟覆盖，保证与过期判断同源
+        generationTaskMapper.touchHeartbeat(task.getId());
         locallyOwnedTaskIds.add(task.getId());
         try {
             generationTaskExecutor.execute(() -> {
@@ -192,11 +194,11 @@ public class GenerationTaskServiceImpl extends ServiceImpl<GenerationTaskMapper,
     }
 
     int reclaimStaleTasksNow() {
-        LocalDateTime cutoff = LocalDateTime.now().minus(executorProperties.getStaleAfter());
-        List<GenerationTask> staleTasks = generationTaskMapper.selectStaleActiveTasks(cutoff);
+        long staleAfterSeconds = executorProperties.getStaleAfter().toSeconds();
+        List<GenerationTask> staleTasks = generationTaskMapper.selectStaleActiveTasks(staleAfterSeconds);
         int reclaimed = 0;
         for (GenerationTask task : staleTasks) {
-            if (generationTaskMapper.failIfStale(task.getId(), cutoff) > 0) {
+            if (generationTaskMapper.failIfStale(task.getId(), staleAfterSeconds) > 0) {
                 locallyOwnedTaskIds.remove(task.getId());
                 reclaimed++;
             }

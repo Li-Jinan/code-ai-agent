@@ -28,6 +28,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
@@ -123,9 +124,10 @@ class GenerationTaskServiceImplTest {
                 .status("running")
                 .heartbeatTime(LocalDateTime.now().minusMinutes(6))
                 .build();
-        when(taskMapper.selectStaleActiveTasks(any(LocalDateTime.class))).thenReturn(List.of(staleTask));
-        when(taskMapper.failIfStale(any(Long.class), any(LocalDateTime.class))).thenAnswer(invocation -> {
-            LocalDateTime cutoff = invocation.getArgument(1);
+        when(taskMapper.selectStaleActiveTasks(300L)).thenReturn(List.of(staleTask));
+        when(taskMapper.failIfStale(any(Long.class), anyLong())).thenAnswer(invocation -> {
+            long staleAfterSeconds = invocation.getArgument(1);
+            LocalDateTime cutoff = LocalDateTime.now().minusSeconds(staleAfterSeconds);
             if ("running".equals(staleTask.getStatus()) && staleTask.getHeartbeatTime().isBefore(cutoff)) {
                 staleTask.setStatus("failed");
                 staleTask.setRunningAppId(null);
