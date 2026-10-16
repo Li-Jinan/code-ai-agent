@@ -45,25 +45,35 @@ langchain4j:
       api-key: <Your API Key>
       model-name: deepseek-chat
       max-tokens: 8192
+      timeout: 3m
       log-requests: true
       log-responses: true
     # 推理 AI 模型配置（用于复杂的推理任务）
     reasoning-streaming-chat-model:
       base-url: https://api.deepseek.com
       api-key: <Your API Key>
-      model-name: deepseek-reasoner
+      # Vue 工具调用使用 chat 模型，避免 reasoning 模型反复重写同一批文件。
+      model-name: deepseek-chat
       max-tokens: 32768
       temperature: 0.1
+      timeout: 3m
       log-requests: true
       log-responses: true
     # 智能路由 AI 模型配置
     routing-chat-model:
-      base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
+      base-url: https://api.deepseek.com
       api-key: <Your API Key>
-      model-name: qwen-turbo
+      model-name: deepseek-chat
       max-tokens: 100
+      timeout: 15s
       log-requests: true
       log-responses: true
+# Bounded generation resources (similar to a fixed GPU Pod quota)
+generation:
+  task:
+    worker-count: 2
+    queue-capacity: 8
+    timeout: 10m
 # springdoc-openapi
 springdoc:
   group-configs:

@@ -3,6 +3,7 @@ package com.jinan.codeaiagent.user.controller;
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.util.StrUtil;
 import com.mybatisflex.core.paginate.Page;
+import com.mybatisflex.core.query.QueryWrapper;
 import com.jinan.codeaiagent.annotation.AuthCheck;
 import com.jinan.codeaiagent.common.BaseResponse;
 import com.jinan.codeaiagent.common.DeleteRequest;
@@ -35,6 +36,7 @@ import java.util.List;
 public class UserController {
 
     private static final String DEFAULT_USER_AVATAR = "/userAvatar.svg";
+    private static final String EMAIL_PATTERN = "^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$";
 
     @Resource
     private UserService userService;
@@ -81,7 +83,7 @@ public class UserController {
         ThrowUtils.throwIf(userEmailCodeRequest == null, ErrorCode.PARAMS_ERROR);
         boolean result = userService.sendEmailLoginCode(
                 userEmailCodeRequest.getUserEmail(),
-                userEmailCodeRequest.getVerifyScene()
+                userEmailCodeRequest.getCodePurpose()
         );
         return ResultUtils.success(result);
     }
@@ -99,6 +101,37 @@ public class UserController {
                 request
         );
         return ResultUtils.success(loginUserVO);
+    }
+
+    /**
+     * 通过邮箱验证码重置密码
+     */
+    @PostMapping("/password/reset")
+    public BaseResponse<Boolean> resetPassword(@RequestBody UserPasswordResetRequest passwordResetRequest) {
+        ThrowUtils.throwIf(passwordResetRequest == null, ErrorCode.PARAMS_ERROR);
+        boolean result = userService.resetPassword(
+                passwordResetRequest.getUserEmail(),
+                passwordResetRequest.getEmailCode(),
+                passwordResetRequest.getNewPassword(),
+                passwordResetRequest.getCheckPassword()
+        );
+        return ResultUtils.success(result);
+    }
+
+    /**
+     * 当前登录用户修改密码
+     */
+    @PostMapping("/password/update")
+    public BaseResponse<Boolean> updatePassword(@RequestBody UserPasswordUpdateRequest passwordUpdateRequest,
+                                                HttpServletRequest request) {
+        ThrowUtils.throwIf(passwordUpdateRequest == null, ErrorCode.PARAMS_ERROR);
+        boolean result = userService.updatePassword(
+                passwordUpdateRequest.getOldPassword(),
+                passwordUpdateRequest.getNewPassword(),
+                passwordUpdateRequest.getCheckPassword(),
+                request
+        );
+        return ResultUtils.success(result);
     }
 
     @GetMapping("/get/login")
@@ -192,6 +225,40 @@ public class UserController {
     }
 
     /**
+     * 更新当前登录用户资料
+     */
+    @PostMapping("/update/my")
+    public BaseResponse<LoginUserVO> updateMyUser(@RequestBody UserUpdateRequest userUpdateRequest,
+                                                  HttpServletRequest request) {
+        ThrowUtils.throwIf(userUpdateRequest == null, ErrorCode.PARAMS_ERROR);
+        String userName = StrUtil.trim(userUpdateRequest.getUserName());
+        String userEmail = StrUtil.trim(userUpdateRequest.getUserEmail());
+        ThrowUtils.throwIf(StrUtil.isBlank(userName), ErrorCode.PARAMS_ERROR, "昵称不能为空");
+        ThrowUtils.throwIf(userName.length() > 30, ErrorCode.PARAMS_ERROR, "昵称不能超过 30 个字符");
+        ThrowUtils.throwIf(!isEmail(userEmail), ErrorCode.PARAMS_ERROR, "邮箱格式不正确");
+
+        User loginUser = userService.getLoginUser(request);
+        QueryWrapper emailQueryWrapper = QueryWrapper.create()
+                .eq("userEmail", userEmail)
+                .ne("id", loginUser.getId());
+        ThrowUtils.throwIf(userService.count(emailQueryWrapper) > 0,
+                ErrorCode.PARAMS_ERROR, "邮箱已被使用");
+
+        User user = new User();
+        user.setId(loginUser.getId());
+        user.setUserName(userName);
+        user.setUserEmail(userEmail);
+        user.setUserAvatar(getAvatarOrDefault(userUpdateRequest.getUserAvatar()));
+        user.setUserProfile(StrUtil.trim(userUpdateRequest.getUserProfile()));
+        boolean result = userService.updateById(user);
+        ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR, "个人资料更新失败");
+
+        User newLoginUser = userService.getById(loginUser.getId());
+        request.getSession().setAttribute(UserConstant.USER_LOGIN_STATE, newLoginUser);
+        return ResultUtils.success(userService.getLoginUserVO(newLoginUser));
+    }
+
+    /**
      * 分页获取用户封装列表（仅管理员）
      *
      * @param userQueryRequest 查询请求参数
@@ -213,5 +280,9 @@ public class UserController {
 
     private String getAvatarOrDefault(String userAvatar) {
         return StrUtil.blankToDefault(userAvatar, DEFAULT_USER_AVATAR).trim();
+    }
+
+    private boolean isEmail(String value) {
+        return StrUtil.isNotBlank(value) && value.matches(EMAIL_PATTERN);
     }
 }

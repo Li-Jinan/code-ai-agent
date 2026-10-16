@@ -15,14 +15,29 @@ RUN mvn -B -pl ${MODULE} -am dependency:go-offline
 COPY . .
 RUN mvn -B -pl ${MODULE} -am package -DskipTests
 
-FROM eclipse-temurin:21-jre
+FROM node:22-bookworm-slim AS node-runtime
+
+FROM eclipse-temurin:21-jre AS service-runtime
 WORKDIR /app
 
 ARG MODULE
 COPY --from=build /workspace/${MODULE}/target/*.jar /app/app.jar
 
-RUN mkdir -p /app/tmp/code_output /app/tmp/code_deploy
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --system --gid 10001 app \
+    && useradd --system --uid 10001 --gid app --home-dir /app --shell /usr/sbin/nologin app \
+    && mkdir -p /app/tmp/code_output /app/tmp/code_deploy /app/tmp/screenshots \
+    && chown -R app:app /app
+
+USER app
 EXPOSE 8124 8125 8127 50051 50052 50053
 
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]
 
+# Generated Vue projects are built inside app-service before being published.
+FROM service-runtime AS app-runtime
+USER root
+COPY --from=node-runtime /usr/local/ /usr/local/
+USER app

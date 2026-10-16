@@ -13,7 +13,7 @@
 
       <div class="login-card">
         <div class="login-card-header">
-          <h2 class="title">用户登录</h2>
+          <h2 class="title">{{ cardTitle }}</h2>
           <div class="desc">不写一行代码，生成完整应用</div>
         </div>
 
@@ -21,29 +21,126 @@
           v-model:value="loginMode"
           class="login-mode"
           :options="[
-            { label: '密码登录', value: 'password' },
-            { label: '邮箱登录 / 注册', value: 'emailCode' },
+            { label: '账号密码', value: 'password' },
+            { label: '邮箱验证码', value: 'emailCode' },
           ]"
         />
 
-        <a-form :model="loginFormModel" name="basic" autocomplete="off" @finish="handleSubmit">
+        <a-alert
+          v-if="demoAccountEnabled"
+          class="demo-account"
+          type="info"
+          show-icon
+          message="在线体验账号"
+        >
+          <template #description>
+            <span>账号：{{ demoAccountUsername }}　密码：{{ demoAccountPassword }}</span>
+          </template>
+          <template #action>
+            <a-button size="small" type="link" @click="fillDemoAccount">一键填入</a-button>
+          </template>
+        </a-alert>
+
+        <a-form
+          :key="formKey"
+          :model="loginFormModel"
+          name="basic"
+          autocomplete="off"
+          @finish="handleSubmit"
+        >
           <template v-if="loginMode === 'password'">
-            <a-form-item name="userAccount" :rules="[{ required: true, message: '请输入账号或邮箱' }]">
-              <a-input v-model:value="formState.userAccount" placeholder="请输入账号或邮箱" />
-            </a-form-item>
-            <a-form-item
-              name="userPassword"
-              :rules="[
-                { required: true, message: '请输入密码' },
-                { min: 8, message: '密码长度不能小于 8 位' },
+            <a-segmented
+              v-model:value="passwordAction"
+              class="password-action"
+              :options="[
+                { label: '登录', value: 'login' },
+                { label: '注册', value: 'register' },
               ]"
-            >
-              <a-input-password v-model:value="formState.userPassword" placeholder="请输入密码" />
-            </a-form-item>
-            <div class="mode-tip">
-              <span>密码登录需要先注册账号。</span>
-              <RouterLink to="/user/register">去注册</RouterLink>
-            </div>
+            />
+
+            <template v-if="passwordAction === 'login'">
+              <a-form-item
+                name="userAccount"
+                :rules="[{ required: true, message: '请输入账号或邮箱' }]"
+              >
+                <a-input v-model:value="formState.userAccount" placeholder="请输入账号或邮箱" />
+              </a-form-item>
+              <a-form-item
+                name="userPassword"
+                :rules="[
+                  { required: true, message: '请输入密码' },
+                  { min: 8, message: '密码长度不能小于 8 位' },
+                ]"
+              >
+                <a-input-password v-model:value="formState.userPassword" placeholder="请输入密码" />
+              </a-form-item>
+              <div class="mode-tip password-links">
+                <a-button type="link" @click="passwordAction = 'register'">没有账号？注册账号</a-button>
+                <a-button type="link" @click="openForgotPassword">忘记密码</a-button>
+              </div>
+            </template>
+
+            <template v-else>
+              <a-form-item
+                name="userName"
+                :rules="[{ required: true, message: '请输入昵称' }]"
+              >
+                <a-input v-model:value="registerForm.userName" placeholder="请输入昵称" />
+              </a-form-item>
+              <a-form-item
+                name="userAccount"
+                :rules="[
+                  { required: true, message: '请输入账号' },
+                  { min: 4, message: '账号长度不能小于 4 位' },
+                ]"
+              >
+                <a-input v-model:value="registerForm.userAccount" placeholder="请输入账号" />
+              </a-form-item>
+              <a-form-item
+                name="userEmail"
+                :rules="[
+                  { required: true, message: '请输入邮箱' },
+                  { type: 'email', message: '邮箱格式不正确' },
+                ]"
+              >
+                <a-input
+                  v-model:value="registerForm.userEmail"
+                  type="email"
+                  autocomplete="email"
+                  placeholder="请输入邮箱（用于忘记密码时重置密码）"
+                />
+              </a-form-item>
+              <a-form-item
+                name="userPassword"
+                :rules="[
+                  { required: true, message: '请输入密码' },
+                  { min: 8, message: '密码长度不能小于 8 位' },
+                ]"
+              >
+                <a-input-password v-model:value="registerForm.userPassword" placeholder="请输入密码" />
+              </a-form-item>
+              <a-form-item
+                name="checkPassword"
+                :rules="[
+                  { required: true, message: '请再次输入密码' },
+                  { min: 8, message: '密码长度不能小于 8 位' },
+                ]"
+              >
+                <a-input-password v-model:value="registerForm.checkPassword" placeholder="请再次输入密码" />
+              </a-form-item>
+              <div class="mode-tip password-links">
+                <span>已有账号？</span>
+                <a-button type="link" @click="passwordAction = 'login'">返回登录</a-button>
+              </div>
+              <a-form-item class="agreement-item">
+                <a-checkbox v-model:checked="agreementChecked">
+                  我已阅读并同意
+                  <a-button type="link" class="agreement-link" @click.prevent="showAgreement">
+                    用户协议与隐私说明
+                  </a-button>
+                </a-checkbox>
+              </a-form-item>
+            </template>
           </template>
 
           <template v-else>
@@ -86,31 +183,124 @@
 
           <a-form-item>
             <a-button type="primary" html-type="submit" class="submit-button" :loading="submitLoading">
-              {{ loginMode === 'emailCode' ? '登录 / 注册' : '登录' }}
+              {{ submitText }}
             </a-button>
           </a-form-item>
         </a-form>
       </div>
     </section>
+
+    <a-modal
+      v-model:open="forgotPasswordOpen"
+      title="通过邮箱重置密码"
+      centered
+      :mask-closable="false"
+      :confirm-loading="resetPasswordLoading"
+      ok-text="确认重置"
+      cancel-text="取消"
+      @ok="handleResetPassword"
+    >
+      <a-form ref="forgotPasswordFormRef" layout="vertical" :model="forgotPasswordForm">
+        <a-form-item
+          label="绑定邮箱"
+          name="userEmail"
+          :rules="[
+            { required: true, message: '请输入绑定邮箱' },
+            { type: 'email', message: '邮箱格式不正确' },
+          ]"
+        >
+          <a-input v-model:value="forgotPasswordForm.userEmail" placeholder="请输入绑定邮箱" />
+        </a-form-item>
+        <a-form-item
+          label="验证码"
+          name="emailCode"
+          :rules="[{ required: true, message: '请输入验证码' }]"
+        >
+          <a-input v-model:value="forgotPasswordForm.emailCode" placeholder="请输入验证码">
+            <template #addonAfter>
+              <a-button
+                type="link"
+                class="code-button"
+                :disabled="resetCountdown > 0"
+                :loading="sendingResetCode"
+                @click.prevent="sendResetPasswordCode"
+              >
+                {{ resetCountdown > 0 ? `${resetCountdown}s` : '发送验证码' }}
+              </a-button>
+            </template>
+          </a-input>
+        </a-form-item>
+        <a-form-item
+          label="新密码"
+          name="newPassword"
+          :rules="[
+            { required: true, message: '请输入新密码' },
+            { min: 8, message: '密码长度不能小于 8 位' },
+          ]"
+        >
+          <a-input-password v-model:value="forgotPasswordForm.newPassword" placeholder="请输入新密码" />
+        </a-form-item>
+        <a-form-item
+          label="确认新密码"
+          name="checkPassword"
+          :rules="[
+            { required: true, message: '请再次输入新密码' },
+            { min: 8, message: '密码长度不能小于 8 位' },
+          ]"
+        >
+          <a-input-password
+            v-model:value="forgotPasswordForm.checkPassword"
+            placeholder="请再次输入新密码"
+          />
+        </a-form-item>
+      </a-form>
+    </a-modal>
   </div>
 </template>
 <script lang="ts" setup>
-import { computed, onUnmounted, reactive, ref } from 'vue'
-import { sendEmailLoginCode, userEmailCodeLogin, userLogin } from '@/api/userController.ts'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref } from 'vue'
+import {
+  resetPassword as resetUserPassword,
+  sendEmailLoginCode,
+  userEmailCodeLogin,
+  userLogin,
+  userRegister,
+} from '@/api/userController.ts'
 import { useLoginUserStore } from '@/stores/loginUser.ts'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { message, Modal } from 'ant-design-vue'
+import type { FormInstance } from 'ant-design-vue'
 
 const loginMode = ref<'password' | 'emailCode'>('password')
+const passwordAction = ref<'login' | 'register'>('login')
 const sendingCode = ref(false)
 const submitLoading = ref(false)
 const agreementChecked = ref(false)
 const countdown = ref(0)
+const forgotPasswordOpen = ref(false)
+const demoAccountEnabled = import.meta.env.VITE_DEMO_ACCOUNT_ENABLED !== 'false'
+const demoAccountUsername = import.meta.env.VITE_DEMO_ACCOUNT_USERNAME || 'demo'
+const demoAccountPassword = import.meta.env.VITE_DEMO_ACCOUNT_PASSWORD || 'demo123456'
+
+const fillDemoAccount = async () => {
+  loginMode.value = 'password'
+  passwordAction.value = 'login'
+  await nextTick()
+  Object.assign(formState, {
+    userAccount: demoAccountUsername,
+    userPassword: demoAccountPassword,
+  })
+}
+const forgotPasswordFormRef = ref<FormInstance>()
+const sendingResetCode = ref(false)
+const resetPasswordLoading = ref(false)
+const resetCountdown = ref(0)
 let countdownTimer: number | undefined
+let resetCountdownTimer: number | undefined
 
 const formState = reactive<API.UserLoginRequest>({
-  userAccount: '',
-  userPassword: '',
+  userAccount: demoAccountEnabled ? demoAccountUsername : '',
+  userPassword: demoAccountEnabled ? demoAccountPassword : '',
 })
 
 const emailCodeForm = reactive<API.UserEmailLoginRequest>({
@@ -118,9 +308,43 @@ const emailCodeForm = reactive<API.UserEmailLoginRequest>({
   emailCode: '',
 })
 
-const loginFormModel = computed(() => (loginMode.value === 'password' ? formState : emailCodeForm))
+const registerForm = reactive<API.UserRegisterRequest>({
+  userName: '',
+  userAccount: '',
+  userEmail: '',
+  userPassword: '',
+  checkPassword: '',
+})
+
+const forgotPasswordForm = reactive<API.UserPasswordResetRequest>({
+  userEmail: '',
+  emailCode: '',
+  newPassword: '',
+  checkPassword: '',
+})
+
+const loginFormModel = computed(() => {
+  if (loginMode.value === 'emailCode') {
+    return emailCodeForm
+  }
+  return passwordAction.value === 'login' ? formState : registerForm
+})
+const formKey = computed(() => `${loginMode.value}-${passwordAction.value}`)
+const cardTitle = computed(() => {
+  if (loginMode.value === 'emailCode') {
+    return '邮箱登录 / 注册'
+  }
+  return passwordAction.value === 'login' ? '用户登录' : '创建账号'
+})
+const submitText = computed(() => {
+  if (loginMode.value === 'emailCode') {
+    return '登录 / 注册'
+  }
+  return passwordAction.value === 'login' ? '登录' : '注册并登录'
+})
 
 const router = useRouter()
+const route = useRoute()
 const loginUserStore = useLoginUserStore()
 
 const showActionModal = (title: string, content: string, okText = '确认') => {
@@ -167,6 +391,17 @@ const startCountdown = () => {
   }, 1000)
 }
 
+const startResetCountdown = () => {
+  resetCountdown.value = 60
+  resetCountdownTimer = window.setInterval(() => {
+    resetCountdown.value -= 1
+    if (resetCountdown.value <= 0 && resetCountdownTimer) {
+      window.clearInterval(resetCountdownTimer)
+      resetCountdownTimer = undefined
+    }
+  }, 1000)
+}
+
 const sendCode = async () => {
   const userEmail = emailCodeForm.userEmail?.trim()
   if (!agreementChecked.value) {
@@ -179,7 +414,11 @@ const sendCode = async () => {
   }
   sendingCode.value = true
   try {
-    const res = await sendEmailLoginCode({ userEmail, verifyScene: '登录或注册账号' })
+    const res = await sendEmailLoginCode({
+      userEmail,
+      verifyScene: '登录或注册账号',
+      codePurpose: 'login',
+    })
     if (res.data.code === 0) {
       message.success('验证码已发送，未注册邮箱会自动创建账号')
       startCountdown()
@@ -194,6 +433,80 @@ const sendCode = async () => {
   }
 }
 
+const openForgotPassword = () => {
+  const account = formState.userAccount?.trim() || ''
+  if (account.includes('@')) {
+    forgotPasswordForm.userEmail = account
+  }
+  forgotPasswordOpen.value = true
+}
+
+const sendResetPasswordCode = async () => {
+  const userEmail = forgotPasswordForm.userEmail?.trim()
+  if (!userEmail) {
+    message.warning('请先输入绑定邮箱')
+    return
+  }
+  sendingResetCode.value = true
+  try {
+    const res = await sendEmailLoginCode({
+      userEmail,
+      verifyScene: '重置账号密码',
+      codePurpose: 'resetPassword',
+    })
+    if (res.data.code === 0) {
+      message.success('重置密码验证码已发送')
+      startResetCountdown()
+    } else {
+      message.error(res.data.message || '验证码发送失败')
+    }
+  } catch (error) {
+    console.error('发送重置密码验证码失败：', error)
+    message.error('验证码发送失败，请稍后重试')
+  } finally {
+    sendingResetCode.value = false
+  }
+}
+
+const handleResetPassword = async () => {
+  try {
+    await forgotPasswordFormRef.value?.validate()
+  } catch {
+    return
+  }
+  if (forgotPasswordForm.newPassword !== forgotPasswordForm.checkPassword) {
+    message.warning('两次输入的新密码不一致')
+    return
+  }
+  resetPasswordLoading.value = true
+  try {
+    const res = await resetUserPassword({
+      userEmail: forgotPasswordForm.userEmail?.trim(),
+      emailCode: forgotPasswordForm.emailCode?.trim(),
+      newPassword: forgotPasswordForm.newPassword,
+      checkPassword: forgotPasswordForm.checkPassword,
+    })
+    if (res.data.code === 0) {
+      formState.userAccount = forgotPasswordForm.userEmail?.trim()
+      formState.userPassword = ''
+      forgotPasswordOpen.value = false
+      loginMode.value = 'password'
+      passwordAction.value = 'login'
+      forgotPasswordForm.emailCode = ''
+      forgotPasswordForm.newPassword = ''
+      forgotPasswordForm.checkPassword = ''
+      message.success('密码已重置，请使用新密码登录')
+    } else {
+      message.error(res.data.message || '密码重置失败')
+    }
+  } catch (error) {
+    console.error('重置密码失败：', error)
+    message.error('密码重置失败，请检查验证码')
+  } finally {
+    resetPasswordLoading.value = false
+  }
+}
+
 /**
  * 提交表单
  * @param values
@@ -202,8 +515,53 @@ const handleSubmit = async () => {
   if (submitLoading.value) {
     return
   }
-  if (loginMode.value === 'emailCode' && !agreementChecked.value) {
-    showActionModal('请先同意用户协议', '邮箱验证码登录会在账号不存在时自动注册，请先阅读并同意用户协议与隐私说明。')
+  const isRegistration =
+    loginMode.value === 'emailCode' ||
+    (loginMode.value === 'password' && passwordAction.value === 'register')
+  if (isRegistration && !agreementChecked.value) {
+    const content =
+      loginMode.value === 'emailCode'
+        ? '邮箱验证码登录会在账号不存在时自动注册，请先阅读并同意用户协议与隐私说明。'
+        : '创建密码账号前，请先阅读并同意用户协议与隐私说明。'
+    showActionModal('请先同意用户协议', content)
+    return
+  }
+  if (loginMode.value === 'password' && passwordAction.value === 'register') {
+    if (registerForm.userPassword !== registerForm.checkPassword) {
+      showActionModal('两次密码不一致', '请重新确认注册密码。', '重新填写')
+      return
+    }
+    submitLoading.value = true
+    try {
+      const registerRes = await userRegister({
+        userName: registerForm.userName?.trim(),
+        userAccount: registerForm.userAccount?.trim(),
+        userEmail: registerForm.userEmail?.trim(),
+        userPassword: registerForm.userPassword,
+        checkPassword: registerForm.checkPassword,
+      })
+      if (registerRes.data.code !== 0) {
+        showActionModal('注册失败', registerRes.data.message || '请检查注册信息。', '重新填写')
+        return
+      }
+      const loginRes = await userLogin({
+        userAccount: registerForm.userAccount?.trim(),
+        userPassword: registerForm.userPassword,
+      })
+      if (loginRes.data.code === 0 && loginRes.data.data) {
+        message.success('注册成功')
+        await finishLogin(loginRes.data.data)
+      } else {
+        passwordAction.value = 'login'
+        formState.userAccount = registerForm.userAccount?.trim()
+        showActionModal('注册成功', '账号已创建，请使用密码登录。')
+      }
+    } catch (error) {
+      console.error('注册失败：', error)
+      showActionModal('注册失败', '注册请求没有成功完成，请稍后重试。', '重新填写')
+    } finally {
+      submitLoading.value = false
+    }
     return
   }
   submitLoading.value = true
@@ -232,9 +590,23 @@ const handleSubmit = async () => {
   }
 }
 
+onMounted(async () => {
+  if (route.query.forgot !== '1') {
+    return
+  }
+  if (!loginUserStore.loginUser.userEmail) {
+    await loginUserStore.fetchLoginUser().catch(() => undefined)
+  }
+  forgotPasswordForm.userEmail = loginUserStore.loginUser.userEmail || ''
+  forgotPasswordOpen.value = true
+})
+
 onUnmounted(() => {
   if (countdownTimer) {
     window.clearInterval(countdownTimer)
+  }
+  if (resetCountdownTimer) {
+    window.clearInterval(resetCountdownTimer)
   }
 })
 </script>
@@ -366,6 +738,33 @@ onUnmounted(() => {
   font-weight: 600;
 }
 
+.demo-account {
+  margin: -10px 0 24px;
+}
+
+.demo-account :deep(.ant-alert-description) {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.password-action {
+  display: flex;
+  width: 100%;
+  padding: 3px;
+  margin: -10px 0 20px;
+  border-radius: 8px;
+  background: #f7faf8;
+}
+
+.password-action :deep(.ant-segmented-group) {
+  display: flex;
+  width: 100%;
+}
+
+.password-action :deep(.ant-segmented-item) {
+  flex: 1;
+  text-align: center;
+}
+
 #userLoginPage :deep(.ant-input),
 #userLoginPage :deep(.ant-input-affix-wrapper),
 #userLoginPage :deep(.ant-input-group-addon) {
@@ -411,6 +810,18 @@ onUnmounted(() => {
 
 .mode-tip a {
   color: #2f7d4b;
+  font-weight: 600;
+}
+
+.password-links {
+  justify-content: space-between;
+}
+
+.password-links :deep(.ant-btn-link) {
+  height: auto;
+  padding: 0;
+  color: #2f7d4b;
+  font-size: 13px;
   font-weight: 600;
 }
 

@@ -92,7 +92,7 @@ public class UserController {
         ThrowUtils.throwIf(userEmailCodeRequest == null, ErrorCode.PARAMS_ERROR);
         boolean result = userService.sendEmailLoginCode(
                 userEmailCodeRequest.getUserEmail(),
-                userEmailCodeRequest.getVerifyScene()
+                userEmailCodeRequest.getCodePurpose()
         );
         return ResultUtils.success(result);
     }
@@ -110,6 +110,44 @@ public class UserController {
                 request
         );
         return ResultUtils.success(loginUserVO);
+    }
+
+    /**
+     * 通过邮箱验证码重置密码
+     */
+    @PostMapping("/password/reset")
+    @RateLimit(
+            key = "password-reset",
+            limitType = RateLimitType.IP,
+            rate = 10,
+            rateInterval = 60,
+            message = "密码重置请求过于频繁，请稍后再试"
+    )
+    public BaseResponse<Boolean> resetPassword(@RequestBody UserPasswordResetRequest passwordResetRequest) {
+        ThrowUtils.throwIf(passwordResetRequest == null, ErrorCode.PARAMS_ERROR);
+        boolean result = userService.resetPassword(
+                passwordResetRequest.getUserEmail(),
+                passwordResetRequest.getEmailCode(),
+                passwordResetRequest.getNewPassword(),
+                passwordResetRequest.getCheckPassword()
+        );
+        return ResultUtils.success(result);
+    }
+
+    /**
+     * 当前登录用户修改密码
+     */
+    @PostMapping("/password/update")
+    public BaseResponse<Boolean> updatePassword(@RequestBody UserPasswordUpdateRequest passwordUpdateRequest,
+                                                HttpServletRequest request) {
+        ThrowUtils.throwIf(passwordUpdateRequest == null, ErrorCode.PARAMS_ERROR);
+        boolean result = userService.updatePassword(
+                passwordUpdateRequest.getOldPassword(),
+                passwordUpdateRequest.getNewPassword(),
+                passwordUpdateRequest.getCheckPassword(),
+                request
+        );
+        return ResultUtils.success(result);
     }
 
     @GetMapping("/get/login")

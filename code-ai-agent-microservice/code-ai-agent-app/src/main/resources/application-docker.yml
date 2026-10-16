@@ -1,0 +1,54 @@
+spring:
+  datasource:
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME:root}
+    password: ${SPRING_DATASOURCE_PASSWORD}
+  data:
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST:redis}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
+      password: ${SPRING_DATA_REDIS_PASSWORD}
+      ttl: ${REDIS_CHAT_TTL:3600}
+
+server:
+  forward-headers-strategy: framework
+
+app:
+  public-base-url: ${PUBLIC_BASE_URL}
+
+generation:
+  task:
+    worker-count: ${GENERATION_TASK_WORKER_COUNT:2}
+    queue-capacity: ${GENERATION_TASK_QUEUE_CAPACITY:8}
+    timeout: ${GENERATION_TASK_TIMEOUT:10m}
+
+dubbo:
+  registry:
+    address: ${DUBBO_REGISTRY_ADDRESS:nacos://nacos:8848}
+  protocol:
+    host: ${DUBBO_PROTOCOL_HOST:app-service}
+
+code:
+  # Docker deployments must provide both explicitly. Failing at startup is safer
+  # than silently returning localhost or a stale public port to users.
+  deploy-host: ${DEPLOY_BASE_URL}
+  internal-deploy-host: ${INTERNAL_DEPLOY_BASE_URL}
+
+langchain4j:
+  open-ai:
+    chat-model:
+      api-key: ${DEEPSEEK_API_KEY}
+      log-requests: false
+      log-responses: false
+    streaming-chat-model:
+      api-key: ${DEEPSEEK_API_KEY}
+      log-requests: false
+      log-responses: false
+    reasoning-streaming-chat-model:
+      api-key: ${DEEPSEEK_API_KEY}
+      log-requests: false
+      log-responses: false
+    routing-chat-model:
+      api-key: ${DEEPSEEK_API_KEY}
+      log-requests: false
+      log-responses: false

@@ -49,10 +49,10 @@ public interface UserService extends IService<User> {
      * 发送邮箱登录验证码
      *
      * @param userEmail 用户邮箱
-     * @param verifyScene 验证码用途
+     * @param codePurpose 验证码用途
      * @return 是否发送成功
      */
-    boolean sendEmailLoginCode(String userEmail, String verifyScene);
+    boolean sendEmailLoginCode(String userEmail, String codePurpose);
 
     /**
      * 邮箱验证码登录
@@ -63,6 +63,17 @@ public interface UserService extends IService<User> {
      * @return 脱敏后的用户信息
      */
     LoginUserVO userEmailCodeLogin(String userEmail, String emailCode, HttpServletRequest request);
+
+    /**
+     * 通过邮箱验证码重置密码
+     */
+    boolean resetPassword(String userEmail, String emailCode, String newPassword, String checkPassword);
+
+    /**
+     * 当前登录用户校验原密码后修改密码
+     */
+    boolean updatePassword(String oldPassword, String newPassword, String checkPassword,
+                           HttpServletRequest request);
 
     /**
      * 获取当前登录用户

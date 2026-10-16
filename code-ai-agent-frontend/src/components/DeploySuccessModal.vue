@@ -16,7 +16,14 @@
         </a-input>
       </div>
       <div class="deploy-actions">
-        <a-button type="primary" @click="handleOpenSite">访问网站</a-button>
+        <a-button
+          type="primary"
+          :href="deployUrl"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          访问网站
+        </a-button>
         <a-button @click="handleClose">关闭</a-button>
       </div>
     </div>
@@ -35,7 +42,6 @@ interface Props {
 
 interface Emits {
   (e: 'update:open', value: boolean): void
-  (e: 'open-site'): void
 }
 
 const props = defineProps<Props>()
@@ -54,10 +60,6 @@ const handleCopyUrl = async () => {
     console.error('复制失败：', error)
     message.error('复制失败')
   }
-}
-
-const handleOpenSite = () => {
-  emit('open-site')
 }
 
 const handleClose = () => {

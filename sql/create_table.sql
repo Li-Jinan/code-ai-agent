@@ -83,9 +83,12 @@ create table if not exists generation_task
     errorMessage varchar(512)                       null comment '失败原因',
     startTime    datetime                           null comment '开始时间',
     finishTime   datetime                           null comment '结束时间',
+    heartbeat_time datetime                         null comment '最近任务心跳时间',
+    running_app_id bigint                           null comment '应用当前生成任务占用标记',
     createTime   datetime default CURRENT_TIMESTAMP not null comment '创建时间',
     updateTime   datetime default CURRENT_TIMESTAMP not null on update CURRENT_TIMESTAMP comment '更新时间',
     isDelete     tinyint  default 0                 not null comment '是否删除',
+    UNIQUE KEY uk_generation_task_running_app (running_app_id),
     INDEX idx_appId_createTime (appId, createTime),
     INDEX idx_userId_status (userId, status),
     INDEX idx_status_createTime (status, createTime)

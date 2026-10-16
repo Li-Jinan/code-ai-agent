@@ -59,9 +59,9 @@ langchain4j:
       log-responses: false
     # 智能路由 AI 模型配置
     routing-chat-model:
-      base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
+      base-url: https://api.deepseek.com
       api-key: <your-api-key>
-      model-name: qwen-turbo
+      model-name: deepseek-chat
       max-tokens: 100
       log-requests: false
       log-responses: false
@@ -92,4 +92,4 @@ knife4j:
     password: 123456
 # 部署路径
 code:
-  deploy-host: http://<your-server-ip>/dist
+  deploy-host: https://preview.your-domain.com

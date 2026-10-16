@@ -16,6 +16,10 @@
       <div class="profile-actions">
         <a-button type="primary" @click="goHomeCreate">创建新作品</a-button>
         <a-button @click="scrollToWorks">我的作品</a-button>
+        <a-button @click="scrollToSecurity">
+          <template #icon><LockOutlined /></template>
+          账号安全
+        </a-button>
       </div>
     </section>
 
@@ -35,6 +39,17 @@
             {{ formatDate(loginUserStore.loginUser.createTime) }}
           </a-descriptions-item>
         </a-descriptions>
+        <a-divider />
+        <div id="profileSecurity" class="security-block">
+          <div>
+            <div class="security-title">账号安全</div>
+            <p>定期更换密码；忘记原密码时可使用绑定邮箱重置。</p>
+          </div>
+          <div class="security-actions">
+            <a-button type="primary" @click="openPasswordModal">修改密码</a-button>
+            <a-button @click="goToEmailReset">忘记原密码</a-button>
+          </div>
+        </div>
       </div>
 
       <div class="edit-panel">
@@ -116,23 +131,74 @@
         />
       </div>
     </section>
+
+    <a-modal
+      v-model:open="passwordModalOpen"
+      title="修改密码"
+      centered
+      :mask-closable="false"
+      :confirm-loading="updatingPassword"
+      ok-text="确认修改"
+      cancel-text="取消"
+      @ok="savePassword"
+    >
+      <a-form ref="passwordFormRef" layout="vertical" :model="passwordForm">
+        <a-form-item
+          label="原密码"
+          name="oldPassword"
+          :rules="[{ required: true, message: '请输入原密码' }]"
+        >
+          <a-input-password v-model:value="passwordForm.oldPassword" placeholder="请输入原密码" />
+        </a-form-item>
+        <a-form-item
+          label="新密码"
+          name="newPassword"
+          :rules="[
+            { required: true, message: '请输入新密码' },
+            { min: 8, message: '密码长度不能小于 8 位' },
+          ]"
+        >
+          <a-input-password v-model:value="passwordForm.newPassword" placeholder="请输入新密码" />
+        </a-form-item>
+        <a-form-item
+          label="确认新密码"
+          name="checkPassword"
+          :rules="[
+            { required: true, message: '请再次输入新密码' },
+            { min: 8, message: '密码长度不能小于 8 位' },
+          ]"
+        >
+          <a-input-password
+            v-model:value="passwordForm.checkPassword"
+            placeholder="请再次输入新密码"
+          />
+        </a-form-item>
+      </a-form>
+    </a-modal>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
-import { updateMyUser } from '@/api/userController.ts'
+import type { FormInstance } from 'ant-design-vue'
+import axios from 'axios'
+import { updateMyUser, updatePassword } from '@/api/userController.ts'
 import { listMyAppVoByPage } from '@/api/appController.ts'
 import { useLoginUserStore } from '@/stores/loginUser.ts'
 import { getAvatarUrl } from '@/utils/avatar'
 import { getDeployUrl } from '@/config/env'
 import AppCard from '@/components/AppCard.vue'
+import { LockOutlined } from '@ant-design/icons-vue'
 
 const router = useRouter()
+const route = useRoute()
 const loginUserStore = useLoginUserStore()
 const savingProfile = ref(false)
+const passwordModalOpen = ref(false)
+const updatingPassword = ref(false)
+const passwordFormRef = ref<FormInstance>()
 const myApps = ref<API.AppVO[]>([])
 const myAppsPage = reactive({
   current: 1,
@@ -145,6 +211,12 @@ const profileForm = reactive({
   userAvatar: '',
   userEmail: '',
   userProfile: '',
+})
+
+const passwordForm = reactive<API.UserPasswordUpdateRequest>({
+  oldPassword: '',
+  newPassword: '',
+  checkPassword: '',
 })
 
 const profileAvatar = computed(() => getAvatarUrl(loginUserStore.loginUser.userAvatar))
@@ -193,7 +265,10 @@ const saveProfile = async () => {
     }
   } catch (error) {
     console.error('保存个人资料失败：', error)
-    message.error('保存失败，请稍后重试')
+    const responseMessage = axios.isAxiosError<API.BaseResponseLoginUserVO>(error)
+      ? error.response?.data?.message
+      : undefined
+    message.error(responseMessage ? `保存失败，${responseMessage}` : '保存失败，请稍后重试')
   } finally {
     savingProfile.value = false
   }
@@ -239,6 +314,68 @@ const scrollToWorks = () => {
   document.querySelector('#profileWorks')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
+const scrollToSecurity = () => {
+  document.querySelector('#profileSecurity')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+}
+
+const handleProfileHash = async (hash: string) => {
+  await nextTick()
+  if (hash === '#profileWorks') {
+    scrollToWorks()
+  } else if (hash === '#profileSecurity') {
+    scrollToSecurity()
+  }
+}
+
+watch(
+  () => route.hash,
+  (hash) => {
+    void handleProfileHash(hash)
+  },
+)
+
+const openPasswordModal = () => {
+  passwordModalOpen.value = true
+}
+
+const goToEmailReset = () => {
+  router.push('/user/login?forgot=1')
+}
+
+const savePassword = async () => {
+  try {
+    await passwordFormRef.value?.validate()
+  } catch {
+    return
+  }
+  if (passwordForm.newPassword !== passwordForm.checkPassword) {
+    message.warning('两次输入的新密码不一致')
+    return
+  }
+  updatingPassword.value = true
+  try {
+    const res = await updatePassword({
+      oldPassword: passwordForm.oldPassword,
+      newPassword: passwordForm.newPassword,
+      checkPassword: passwordForm.checkPassword,
+    })
+    if (res.data.code === 0) {
+      passwordModalOpen.value = false
+      passwordForm.oldPassword = ''
+      passwordForm.newPassword = ''
+      passwordForm.checkPassword = ''
+      message.success('密码已修改')
+    } else {
+      message.error(res.data.message || '密码修改失败')
+    }
+  } catch (error) {
+    console.error('修改密码失败：', error)
+    message.error('密码修改失败，请检查原密码')
+  } finally {
+    updatingPassword.value = false
+  }
+}
+
 onMounted(async () => {
   await loginUserStore.fetchLoginUser()
   if (!loginUserStore.loginUser.id) {
@@ -248,10 +385,7 @@ onMounted(async () => {
   }
   syncProfileForm()
   loadMyApps()
-  if (router.currentRoute.value.hash === '#profileWorks') {
-    await nextTick()
-    scrollToWorks()
-  }
+  await handleProfileHash(route.hash)
 })
 </script>
 
@@ -268,6 +402,29 @@ onMounted(async () => {
 .profile-content {
   max-width: 1080px;
   margin: 0 auto;
+}
+
+.security-block {
+  scroll-margin-top: 88px;
+}
+
+.security-title {
+  margin-bottom: 6px;
+  color: #173a28;
+  font-weight: 700;
+}
+
+.security-block p {
+  margin: 0;
+  color: #66786c;
+  line-height: 1.65;
+}
+
+.security-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 16px;
 }
 
 .profile-card {
@@ -334,6 +491,7 @@ onMounted(async () => {
   max-width: 1080px;
   margin: 20px auto 0;
   padding: 24px;
+  scroll-margin-top: 88px;
   background: #fff;
   border: 1px solid rgba(47, 125, 75, 0.1);
   border-radius: 8px;
@@ -416,6 +574,11 @@ onMounted(async () => {
 
   .profile-actions,
   .works-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .security-actions {
     align-items: stretch;
     flex-direction: column;
   }

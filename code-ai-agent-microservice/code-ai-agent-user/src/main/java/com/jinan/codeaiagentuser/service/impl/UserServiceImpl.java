@@ -43,8 +43,10 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     private static final String EMAIL_PATTERN = "^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$";
     private static final String DEFAULT_USER_AVATAR = "/userAvatar.svg";
     private static final String DEFAULT_USER_NAME = "新用户";
-    private static final String EMAIL_CODE_KEY_PREFIX = "code-ai-agent:user:email-login:";
-    private static final String EMAIL_CODE_LIMIT_KEY_PREFIX = "code-ai-agent:user:email-login-limit:";
+    private static final String EMAIL_CODE_KEY_PREFIX = "code-ai-agent:user:email-code:";
+    private static final String EMAIL_CODE_LIMIT_KEY_PREFIX = "code-ai-agent:user:email-code-limit:";
+    private static final String CODE_PURPOSE_LOGIN = "login";
+    private static final String CODE_PURPOSE_RESET_PASSWORD = "resetPassword";
     private static final Duration EMAIL_CODE_TTL = Duration.ofMinutes(5);
     private static final Duration EMAIL_CODE_SEND_INTERVAL = Duration.ofSeconds(60);
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
@@ -57,6 +59,12 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
 
     @Value("${spring.mail.username:}")
     private String mailFrom;
+
+    @Value("${demo.account.enabled:false}")
+    private boolean demoAccountEnabled;
+
+    @Value("${demo.account.username:demo}")
+    private String demoAccountUsername;
 
     @Override
     public long userRegister(String userAccount, String userEmail, String userName, String userPassword, String checkPassword) {
@@ -149,27 +157,37 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     }
 
     @Override
-    public boolean sendEmailLoginCode(String userEmail, String verifyScene) {
+    public boolean sendEmailLoginCode(String userEmail, String codePurpose) {
         if (!isEmail(userEmail)) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "邮箱格式不正确");
         }
         if (StrUtil.isBlank(mailFrom)) {
             throw new BusinessException(ErrorCode.OPERATION_ERROR, "邮件发送账号未配置");
         }
-        String limitKey = EMAIL_CODE_LIMIT_KEY_PREFIX + userEmail;
+        String normalizedEmail = userEmail.trim();
+        String normalizedPurpose = normalizeCodePurpose(codePurpose);
+        if (CODE_PURPOSE_RESET_PASSWORD.equals(normalizedPurpose)) {
+            User user = this.mapper.selectOneByQuery(QueryWrapper.create().eq("userEmail", normalizedEmail));
+            if (user == null) {
+                throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "该邮箱尚未绑定账号");
+            }
+        }
+        String limitKey = getEmailCodeLimitKey(normalizedEmail, normalizedPurpose);
         Boolean canSend = stringRedisTemplate.opsForValue()
                 .setIfAbsent(limitKey, "1", EMAIL_CODE_SEND_INTERVAL);
         if (Boolean.FALSE.equals(canSend)) {
             throw new BusinessException(ErrorCode.OPERATION_ERROR, "验证码发送太频繁，请稍后再试");
         }
         String code = String.format("%06d", SECURE_RANDOM.nextInt(1000000));
-        String codeKey = EMAIL_CODE_KEY_PREFIX + userEmail;
+        String codeKey = getEmailCodeKey(normalizedEmail, normalizedPurpose);
         stringRedisTemplate.opsForValue().set(codeKey, code, EMAIL_CODE_TTL);
         try {
             SimpleMailMessage message = new SimpleMailMessage();
             message.setFrom(mailFrom);
-            message.setTo(userEmail);
-            String sceneText = normalizeVerifyScene(verifyScene);
+            message.setTo(normalizedEmail);
+            String sceneText = CODE_PURPOSE_RESET_PASSWORD.equals(normalizedPurpose)
+                    ? "重置账号密码"
+                    : "登录或注册账号";
             message.setSubject("今安 AI 应用验证码");
             message.setText("【今安 AI 应用】您正在" + sceneText + "，验证码 " + code
                     + "，5 分钟内有效。请勿向任何人泄露，非本人操作请忽略。");
@@ -187,19 +205,72 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         if (!isEmail(userEmail) || StrUtil.isBlank(emailCode)) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "参数错误");
         }
-        String codeKey = EMAIL_CODE_KEY_PREFIX + userEmail;
+        String normalizedEmail = userEmail.trim();
+        String codeKey = getEmailCodeKey(normalizedEmail, CODE_PURPOSE_LOGIN);
         String cachedCode = stringRedisTemplate.opsForValue().get(codeKey);
         if (StrUtil.isBlank(cachedCode) || !cachedCode.equals(emailCode.trim())) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "验证码错误或已过期");
         }
-        QueryWrapper queryWrapper = QueryWrapper.create().eq("userEmail", userEmail);
+        QueryWrapper queryWrapper = QueryWrapper.create().eq("userEmail", normalizedEmail);
         User user = this.mapper.selectOneByQuery(queryWrapper);
         if (user == null) {
-            user = createEmailUser(userEmail);
+            user = createEmailUser(normalizedEmail);
         }
         stringRedisTemplate.delete(codeKey);
         request.getSession().setAttribute(USER_LOGIN_STATE, user);
         return this.getLoginUserVO(user);
+    }
+
+    @Override
+    public boolean resetPassword(String userEmail, String emailCode, String newPassword, String checkPassword) {
+        if (!isEmail(userEmail) || StrUtil.isBlank(emailCode)) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "邮箱或验证码错误");
+        }
+        validateNewPassword(newPassword, checkPassword);
+        String normalizedEmail = userEmail.trim();
+        String codeKey = getEmailCodeKey(normalizedEmail, CODE_PURPOSE_RESET_PASSWORD);
+        String cachedCode = stringRedisTemplate.opsForValue().get(codeKey);
+        if (StrUtil.isBlank(cachedCode) || !cachedCode.equals(emailCode.trim())) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "验证码错误或已过期");
+        }
+        User user = this.mapper.selectOneByQuery(QueryWrapper.create().eq("userEmail", normalizedEmail));
+        if (user == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "该邮箱尚未绑定账号");
+        }
+        user.setUserPassword(getEncryptPassword(newPassword));
+        boolean updated = this.updateById(user);
+        if (!updated) {
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "密码重置失败");
+        }
+        stringRedisTemplate.delete(codeKey);
+        return true;
+    }
+
+    @Override
+    public boolean updatePassword(String oldPassword, String newPassword, String checkPassword,
+                                  HttpServletRequest request) {
+        if (StrUtil.isBlank(oldPassword)) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "请输入原密码");
+        }
+        validateNewPassword(newPassword, checkPassword);
+        if (oldPassword.equals(newPassword)) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "新密码不能与原密码相同");
+        }
+        User user = getLoginUser(request);
+        if (demoAccountEnabled && demoAccountUsername.equals(user.getUserAccount())) {
+            throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "演示账号不允许修改密码");
+        }
+        String encryptedOldPassword = getEncryptPassword(oldPassword);
+        if (!isPasswordMatched(oldPassword, encryptedOldPassword, user.getUserPassword())) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "原密码不正确");
+        }
+        user.setUserPassword(getEncryptPassword(newPassword));
+        boolean updated = this.updateById(user);
+        if (!updated) {
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "密码修改失败");
+        }
+        request.getSession().setAttribute(USER_LOGIN_STATE, user);
+        return true;
     }
 
     @Override
@@ -281,16 +352,48 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         return DigestUtils.md5DigestAsHex((userPassword + SALT).getBytes(StandardCharsets.UTF_8));
     }
 
+    private boolean isPasswordMatched(String rawPassword, String currentEncryptPassword, String storedPassword) {
+        if (currentEncryptPassword.equals(storedPassword)) {
+            return true;
+        }
+        return getLegacyEncryptPassword(rawPassword).equals(storedPassword);
+    }
+
+    private String getLegacyEncryptPassword(String userPassword) {
+        final String LEGACY_SALT = "yupi";
+        return DigestUtils.md5DigestAsHex((userPassword + LEGACY_SALT).getBytes(StandardCharsets.UTF_8));
+    }
+
     private boolean isEmail(String value) {
         return StrUtil.isNotBlank(value) && value.matches(EMAIL_PATTERN);
     }
 
-    private String normalizeVerifyScene(String verifyScene) {
-        String scene = StrUtil.blankToDefault(verifyScene, "登录或注册账号").trim();
-        if (scene.length() > 20) {
-            return scene.substring(0, 20);
+    private void validateNewPassword(String newPassword, String checkPassword) {
+        if (StrUtil.hasBlank(newPassword, checkPassword)) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "请输入新密码和确认密码");
         }
-        return scene;
+        if (newPassword.length() < 8 || checkPassword.length() < 8) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "密码长度不能少于 8 位");
+        }
+        if (!newPassword.equals(checkPassword)) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "两次输入的密码不一致");
+        }
+    }
+
+    private String normalizeCodePurpose(String codePurpose) {
+        String purpose = StrUtil.blankToDefault(codePurpose, CODE_PURPOSE_LOGIN).trim();
+        if (CODE_PURPOSE_LOGIN.equals(purpose) || CODE_PURPOSE_RESET_PASSWORD.equals(purpose)) {
+            return purpose;
+        }
+        throw new BusinessException(ErrorCode.PARAMS_ERROR, "不支持的验证码用途");
+    }
+
+    private String getEmailCodeKey(String userEmail, String codePurpose) {
+        return EMAIL_CODE_KEY_PREFIX + codePurpose + ":" + userEmail;
+    }
+
+    private String getEmailCodeLimitKey(String userEmail, String codePurpose) {
+        return EMAIL_CODE_LIMIT_KEY_PREFIX + codePurpose + ":" + userEmail;
     }
 
     private User createEmailUser(String userEmail) {

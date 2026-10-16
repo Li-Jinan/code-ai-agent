@@ -99,19 +99,22 @@ public class AiCodeGeneratorServiceFactory {
                 // 工具调用消息要求 tool 结果紧跟上一条 tool_calls。Vue 生成使用干净内存，避免重试/刷新后的持久化工具残片污染新请求。
                 MessageWindowChatMemory vueChatMemory = MessageWindowChatMemory.builder()
                         .id(appId)
-                        .maxMessages(12)
+                        // A Vue generation can produce dozens of tool request/result messages.
+                        // Keep enough context so the model remembers the files it has already
+                        // created instead of evicting that progress and starting over.
+                        .maxMessages(100)
                         .build();
                 yield AiServices.builder(AiCodeGeneratorService.class)
                         .chatModel(chatModel)
                         .streamingChatModel(reasoningStreamingChatModel)
                         .chatMemoryProvider(memoryId -> vueChatMemory)
-                        .tools(toolManager.getAllTools())
+                        .tools((Object[]) toolManager.getAllTools())
                         // 处理工具调用幻觉问题
                         .hallucinatedToolNameStrategy(toolExecutionRequest ->
                                 ToolExecutionResultMessage.from(toolExecutionRequest,
                                         "Error: there is no tool called " + toolExecutionRequest.name())
                         )
-                        .maxSequentialToolsInvocations(20)  // 最多连续调用 20 次工具
+                        .maxSequentialToolsInvocations(8)  // 防止模型反复重写同一项目
                         .inputGuardrails(new PromptSafetyInputGuardrail()) // 添加输入护轨
 //                        .outputGuardrails(new RetryOutputGuardrail()) // 添加输出护轨，为了流式输出，这里不使用
                         .build();

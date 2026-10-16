@@ -1,13 +1,14 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import HomePage from '@/pages/HomePage.vue'
-import UserLoginPage from '@/pages/user/UserLoginPage.vue'
-import UserRegisterPage from '@/pages/user/UserRegisterPage.vue'
-import UserProfilePage from '@/pages/user/UserProfilePage.vue'
-import UserManagePage from '@/pages/admin/UserManagePage.vue'
-import AppManagePage from '@/pages/admin/AppManagePage.vue'
-import AppChatPage from '@/pages/app/AppChatPage.vue'
-import AppEditPage from '@/pages/app/AppEditPage.vue'
-import ChatManagePage from "@/pages/admin/ChatManagePage.vue";
+
+const UserLoginPage = () => import('@/pages/user/UserLoginPage.vue')
+const UserRegisterPage = () => import('@/pages/user/UserRegisterPage.vue')
+const UserProfilePage = () => import('@/pages/user/UserProfilePage.vue')
+const UserManagePage = () => import('@/pages/admin/UserManagePage.vue')
+const AppManagePage = () => import('@/pages/admin/AppManagePage.vue')
+const ChatManagePage = () => import('@/pages/admin/ChatManagePage.vue')
+const AppChatPage = () => import('@/pages/app/AppChatPage.vue')
+const AppEditPage = () => import('@/pages/app/AppEditPage.vue')
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),

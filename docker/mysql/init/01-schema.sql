@@ -58,3 +58,23 @@ CREATE TABLE IF NOT EXISTS chat_history
     INDEX idx_appId_createTime (appId, createTime)
 ) COMMENT 'chat history' COLLATE = utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS generation_task
+(
+    id           BIGINT AUTO_INCREMENT COMMENT 'id' PRIMARY KEY,
+    appId        BIGINT                             NOT NULL COMMENT 'app id',
+    userId       BIGINT                             NOT NULL COMMENT 'user id',
+    message      TEXT                               NOT NULL COMMENT 'generation prompt',
+    status       VARCHAR(32)                        NOT NULL COMMENT 'pending/running/succeeded/failed',
+    errorMessage VARCHAR(512)                       NULL COMMENT 'failure reason',
+    startTime    DATETIME                           NULL COMMENT 'start time',
+    finishTime   DATETIME                           NULL COMMENT 'finish time',
+    heartbeat_time DATETIME                         NULL COMMENT 'last task heartbeat',
+    running_app_id BIGINT                           NULL COMMENT 'active generation slot for app',
+    createTime   DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL COMMENT 'create time',
+    updateTime   DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL ON UPDATE CURRENT_TIMESTAMP COMMENT 'update time',
+    isDelete     TINYINT  DEFAULT 0                 NOT NULL COMMENT 'deleted',
+    UNIQUE KEY uk_generation_task_running_app (running_app_id),
+    INDEX idx_appId_createTime (appId, createTime),
+    INDEX idx_userId_status (userId, status),
+    INDEX idx_status_createTime (status, createTime)
+) COMMENT 'generation task' COLLATE = utf8mb4_unicode_ci;

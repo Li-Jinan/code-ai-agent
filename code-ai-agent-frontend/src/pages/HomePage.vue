@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, reactive, onMounted } from 'vue'
+import { computed, ref, reactive, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { useLoginUserStore } from '@/stores/loginUser'
@@ -343,6 +343,17 @@ const viewWork = (app: API.AppVO) => {
     window.open(url, '_blank')
   }
 }
+
+// BasicLayout 会异步恢复登录态。主页可能先于该请求完成挂载，
+// 因此不能只在 onMounted 时判断一次，否则已登录用户会看到空作品列表。
+watch(isLoggedIn, (loggedIn) => {
+  if (loggedIn) {
+    void loadMyApps()
+  } else {
+    myApps.value = []
+    myAppsPage.total = 0
+  }
+})
 
 // 格式化时间函数已移除，不再需要显示创建时间
 

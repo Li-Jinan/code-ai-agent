@@ -77,3 +77,41 @@
 ## 适合简历描述
 
 基于 Spring AI + Spring Boot + RAG + Tool Calling + MCP 构建多模型 AI 智能体应用，支持 ReAct 自主规划、多轮对话记忆、RAG 知识库检索、结构化输出、Prompt 优化、工具调用、MCP 图片搜索服务和流式响应，实现从用户任务输入到智能体规划执行的完整链路。
+
+## 二次开发
+
+### 环境准备
+
+- JDK 21、Maven（推荐使用仓库中的 `mvnw`）、Node.js 与 npm。
+- 微服务开发需要 MySQL、Redis、Nacos；完整截图和部署能力还需要 Selenium/Chromium 与腾讯云 COS。
+- 本地配置请基于 `deploy.microservice.env.example` 创建自己的环境变量文件，并填写数据库、Redis、Nacos、模型及对象存储配置。不要把真实密钥提交到 Git。
+
+### 构建与测试
+
+```bash
+# 构建微服务后端
+bash ./mvnw -f code-ai-agent-microservice/pom.xml -DskipTests package
+
+# 运行 app-service 及其依赖模块的单元测试
+bash ./mvnw -f code-ai-agent-microservice/pom.xml -pl code-ai-agent-app -am test
+
+# 前端
+cd code-ai-agent-frontend
+npm ci
+npm run build
+```
+
+生成任务的 MySQL 集成测试要求使用专用测试库 `generation_task_it`，不会默认连接生产库。提供连接参数后运行：
+
+```bash
+bash ./mvnw -f code-ai-agent-microservice/pom.xml -pl code-ai-agent-app -am test \
+  -Dtest=GenerationTaskMySqlIntegrationTest \
+  -Dsurefire.failIfNoSpecifiedTests=false \
+  -Dmysql.it.url=jdbc:mysql://localhost:3306/generation_task_it \
+  -Dmysql.it.username=root \
+  -Dmysql.it.password=你的测试库密码
+```
+
+### 生成任务可靠性
+
+app-service 为每个应用使用唯一的 `running_app_id` 占用槽位，终态更新时释放槽位；有界线程池限制同时执行和排队的任务数，队列满时会拒绝新任务并返回可理解的提示。任务执行期间定期刷新心跳，回收器对超时任务执行带状态条件的失败更新，避免服务重启后任务永久停留在运行中，也避免回收器覆盖已经完成的任务。

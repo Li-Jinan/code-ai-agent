@@ -1,15 +1,15 @@
 # 截图目录
 
-这个目录用于存放 GitHub README 展示图。
+这个目录用于存放 GitHub README 的线上环境真实截图。
 
-当前仓库先使用 `.svg` 占位图，避免 GitHub README 出现破图。拿到真实截图后，可以用同名 `.png` 替换并同步更新根目录 `README.md` 的图片后缀。
+当前展示图：
 
-建议真实截图文件名：
-
-- `home.png`：首页
-- `login-success.png`：登录成功
-- `create-app-success.png`：创建应用成功
-- `app-generating.png`：AI 生成页面过程
+- `home-hero.png`：首页需求输入区域
+- `home-showcases.png`：可生成案例与社区作品
+- `login-password.png`：账号密码登录
+- `login-email.png`：邮箱验证码登录 / 注册
+- `app-generating.png`：创建应用与 AI 生成过程
 - `generated-preview.png`：生成结果预览
+- `generated-edit-mode.png`：可视化编辑模式
 
-图片放进来后，根目录 `README.md` 会自动引用并展示。
+根目录 `README.md` 使用相对路径引用这些图片。

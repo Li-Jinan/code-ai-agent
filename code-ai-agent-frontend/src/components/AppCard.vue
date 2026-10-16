@@ -15,7 +15,16 @@
       <div class="app-overlay">
         <a-space>
           <a-button v-if="showChat" type="primary" @click.stop="handleViewChat">查看对话</a-button>
-          <a-button v-if="app.deployKey" type="default" @click.stop="handleViewWork">查看作品</a-button>
+          <a-button
+            v-if="app.deployKey"
+            type="default"
+            :href="getDeployUrl(app.deployKey)"
+            target="_blank"
+            rel="noopener noreferrer"
+            @click.stop
+          >
+            查看作品
+          </a-button>
         </a-space>
       </div>
     </div>
@@ -37,6 +46,7 @@
 
 <script setup lang="ts">
 import { getAvatarUrl } from '@/utils/avatar'
+import { getDeployUrl } from '@/config/env'
 
 interface Props {
   app: API.AppVO
@@ -68,9 +78,6 @@ const handleViewChat = () => {
   emit('view-chat', props.app.id)
 }
 
-const handleViewWork = () => {
-  emit('view-work', props.app)
-}
 </script>
 
 <style scoped>

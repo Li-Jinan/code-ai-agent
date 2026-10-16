@@ -121,6 +121,36 @@ export async function sendEmailLoginCode(
   })
 }
 
+/** 通过邮箱验证码重置密码 POST /user/password/reset */
+export async function resetPassword(
+  body: API.UserPasswordResetRequest,
+  options?: { [key: string]: any },
+) {
+  return request<API.BaseResponseBoolean>('/user/password/reset', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    data: body,
+    ...(options || {}),
+  })
+}
+
+/** 当前登录用户修改密码 POST /user/password/update */
+export async function updatePassword(
+  body: API.UserPasswordUpdateRequest,
+  options?: { [key: string]: any },
+) {
+  return request<API.BaseResponseBoolean>('/user/password/update', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    data: body,
+    ...(options || {}),
+  })
+}
+
 /** 此处后端没有提供注释 POST /user/logout */
 export async function userLogout(options?: { [key: string]: any }) {
   return request<API.BaseResponseBoolean>('/user/logout', {

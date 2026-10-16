@@ -21,4 +21,9 @@ public class UserEmailCodeRequest implements Serializable {
      * 验证码用途
      */
     private String verifyScene;
+
+    /**
+     * 验证码用途：login 或 resetPassword
+     */
+    private String codePurpose;
 }

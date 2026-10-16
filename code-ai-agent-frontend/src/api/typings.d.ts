@@ -259,6 +259,7 @@ declare namespace API {
   type UserEmailCodeRequest = {
     userEmail?: string
     verifyScene?: string
+    codePurpose?: 'login' | 'resetPassword'
   }
 
   type UserEmailLoginRequest = {
@@ -269,6 +270,19 @@ declare namespace API {
   type UserLoginRequest = {
     userAccount?: string
     userPassword?: string
+  }
+
+  type UserPasswordResetRequest = {
+    userEmail?: string
+    emailCode?: string
+    newPassword?: string
+    checkPassword?: string
+  }
+
+  type UserPasswordUpdateRequest = {
+    oldPassword?: string
+    newPassword?: string
+    checkPassword?: string
   }
 
   type UserQueryRequest = {

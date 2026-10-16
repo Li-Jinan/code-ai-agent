@@ -11,6 +11,16 @@
           今安 AI 应用开发平台
         </a>
       </p>
+      <p class="filing">
+        <a
+          href="https://beian.miit.gov.cn/"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="filing-link"
+        >
+          豫ICP备2026047753号
+        </a>
+      </p>
     </div>
   </a-layout-footer>
 </template>
@@ -33,5 +43,18 @@
   margin: 0;
   color: #666;
   font-size: 14px;
+}
+
+.filing {
+  margin: 8px 0 0;
+  font-size: 13px;
+}
+
+.filing-link {
+  color: #888;
+}
+
+.filing-link:hover {
+  color: #667eea;
 }
 </style>

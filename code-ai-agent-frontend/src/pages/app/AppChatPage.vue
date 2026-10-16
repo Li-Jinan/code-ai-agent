@@ -233,7 +233,6 @@
     <DeploySuccessModal
         v-model:open="deployModalVisible"
         :deploy-url="deployUrl"
-        @open-site="openDeployedSite"
     />
   </div>
 </template>
@@ -259,7 +258,7 @@ import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
 import AppDetailModal from '@/components/AppDetailModal.vue'
 import DeploySuccessModal from '@/components/DeploySuccessModal.vue'
 import aiAvatar from '@/assets/treeAvatar.svg'
-import { getStaticPreviewUrl } from '@/config/env'
+import { getStaticPreviewUrl, normalizeDeployUrl } from '@/config/env'
 import { VisualEditor, type ElementInfo } from '@/utils/visualEditor'
 import { getAvatarUrl } from '@/utils/avatar'
 
@@ -716,7 +715,9 @@ const generateCode = async (userMessage: string, aiMessageIndex: number) => {
       await new Promise((resolve) => window.setTimeout(resolve, 2000))
       const taskRes = await getGenerationTask({ taskId })
       const task = taskRes.data.data
-      if (task?.status === 'running') {
+      if (task?.status === 'pending') {
+        messages.value[aiMessageIndex].content = '任务正在排队，系统会按可用生成名额自动开始。'
+      } else if (task?.status === 'running') {
         generationStepIndex.value = Math.max(generationStepIndex.value, 1)
         messages.value[aiMessageIndex].content = '后台正在生成网站，离开页面后也会继续执行。'
       } else if (task?.status === 'succeeded') {
@@ -752,9 +753,14 @@ const generateCode = async (userMessage: string, aiMessageIndex: number) => {
 // 错误处理函数
 const handleError = (error: unknown, aiMessageIndex: number) => {
   console.error('生成代码失败：', error)
-  messages.value[aiMessageIndex].content = '❌ 生成失败：生成过程中出现异常，请点击重试。'
+  const apiErrorMessage = (error as { response?: { data?: { message?: string } } })?.response?.data
+    ?.message
+  const localErrorMessage = error instanceof Error ? error.message : ''
+  const errorMessage =
+    apiErrorMessage || localErrorMessage || '生成过程中出现异常，请点击重试。'
+  messages.value[aiMessageIndex].content = `❌ 生成失败：${errorMessage}`
   messages.value[aiMessageIndex].loading = false
-  message.error('生成失败，请重试')
+  message.error(errorMessage)
   isGenerating.value = false
   markRecentGeneration('failed')
   previewUrl.value = ''
@@ -832,7 +838,7 @@ const deployApp = async () => {
     })
 
     if (res.data.code === 0 && res.data.data) {
-      deployUrl.value = res.data.data
+      deployUrl.value = normalizeDeployUrl(res.data.data)
       deployModalVisible.value = true
       message.success('部署成功')
     } else {
@@ -850,13 +856,6 @@ const deployApp = async () => {
 const openInNewTab = () => {
   if (previewUrl.value) {
     window.open(previewUrl.value, '_blank')
-  }
-}
-
-// 打开部署的网站
-const openDeployedSite = () => {
-  if (deployUrl.value) {
-    window.open(deployUrl.value, '_blank')
   }
 }
 

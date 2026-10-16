@@ -65,6 +65,12 @@
                     </template>
                     编辑个人资料
                   </a-button>
+                  <a-button type="text" block class="dropdown-action" @click="goProfileSecurity">
+                    <template #icon>
+                      <LockOutlined />
+                    </template>
+                    账号安全
+                  </a-button>
                   <a-button type="text" block class="dropdown-action" @click="doLogout">
                     <template #icon>
                       <LogoutOutlined />
@@ -110,6 +116,9 @@
             placeholder="粘贴图片 URL，留空则使用默认头像"
           />
         </a-form-item>
+        <a-form-item label="邮箱">
+          <a-input v-model:value="profileForm.userEmail" placeholder="请输入邮箱" />
+        </a-form-item>
         <a-form-item label="个人简介">
           <a-textarea
             v-model:value="profileForm.userProfile"
@@ -128,6 +137,7 @@
 import { computed, h, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { type MenuProps, message, Modal } from 'ant-design-vue'
+import axios from 'axios'
 import { useLoginUserStore } from '@/stores/loginUser.ts'
 import { updateMyUser, userLogout } from '@/api/userController.ts'
 import {
@@ -135,6 +145,7 @@ import {
   LogoutOutlined,
   HomeOutlined,
   EditOutlined,
+  LockOutlined,
   UserOutlined,
 } from '@ant-design/icons-vue'
 import { getAvatarUrl } from '@/utils/avatar'
@@ -146,9 +157,11 @@ const displayUserName = computed(() => loginUserStore.loginUser.userName || '我
 const roleText = computed(() => (loginUserStore.loginUser.userRole === 'admin' ? '管理员' : '普通用户'))
 const profileModalVisible = ref(false)
 const savingProfile = ref(false)
+const emailPattern = /^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$/
 const profileForm = reactive({
   userName: '',
   userAvatar: '',
+  userEmail: '',
   userProfile: '',
 })
 // 当前选中菜单
@@ -239,6 +252,7 @@ const doLogout = async () => {
 const openProfileModal = () => {
   profileForm.userName = loginUserStore.loginUser.userName || ''
   profileForm.userAvatar = loginUserStore.loginUser.userAvatar || ''
+  profileForm.userEmail = loginUserStore.loginUser.userEmail || ''
   profileForm.userProfile = loginUserStore.loginUser.userProfile || ''
   profileModalVisible.value = true
 }
@@ -248,7 +262,27 @@ const goProfilePage = async () => {
 }
 
 const goProfileWorks = async () => {
+  if (
+    router.currentRoute.value.path === '/user/profile' &&
+    router.currentRoute.value.hash === '#profileWorks'
+  ) {
+    document.querySelector('#profileWorks')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    return
+  }
   await router.push({ path: '/user/profile', hash: '#profileWorks' })
+}
+
+const goProfileSecurity = async () => {
+  if (
+    router.currentRoute.value.path === '/user/profile' &&
+    router.currentRoute.value.hash === '#profileSecurity'
+  ) {
+    document
+      .querySelector('#profileSecurity')
+      ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    return
+  }
+  await router.push({ path: '/user/profile', hash: '#profileSecurity' })
 }
 
 const saveProfile = async () => {
@@ -257,11 +291,21 @@ const saveProfile = async () => {
     message.warning('昵称不能为空')
     return
   }
+  const userEmail = profileForm.userEmail.trim()
+  if (!userEmail) {
+    message.warning('邮箱不能为空')
+    return
+  }
+  if (!emailPattern.test(userEmail)) {
+    message.warning('邮箱格式不正确')
+    return
+  }
   savingProfile.value = true
   try {
     const res = await updateMyUser({
       userName,
       userAvatar: getAvatarUrl(profileForm.userAvatar),
+      userEmail,
       userProfile: profileForm.userProfile.trim(),
     })
     if (res.data.code === 0 && res.data.data) {
@@ -273,7 +317,10 @@ const saveProfile = async () => {
     }
   } catch (error) {
     console.error('保存个人资料失败：', error)
-    message.error('保存失败，请稍后重试')
+    const responseMessage = axios.isAxiosError<API.BaseResponseLoginUserVO>(error)
+      ? error.response?.data?.message
+      : undefined
+    message.error(responseMessage ? `保存失败，${responseMessage}` : '保存失败，请稍后重试')
   } finally {
     savingProfile.value = false
   }
