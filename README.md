@@ -28,6 +28,22 @@
 
 基于 Vue 3、Spring Boot、LangChain4j、Dubbo 与 Nacos 构建。用户可以用自然语言描述需求，生成可运行的网站项目，并通过 Tool Calling、应用级对话记忆和可视化选区继续迭代，最终完成预览、下载、部署与作品封面生成。
 
+## 项目来源与二次开发说明
+
+本项目基于开源项目 [liyupi/yu-ai-code-mother](https://github.com/liyupi/yu-ai-code-mother) 进行二次开发。上游项目提供了 AI 应用生成、Tool Calling、Redis 对话记忆与 LangGraph4j 工作流等基础能力；本仓库在此基础上聚焦生成链路可靠性、微服务化部署与账号体系工程化。
+
+为使项目经历与代码状态可核对，二次开发内容及其公开状态如下：
+
+| 二次开发内容 | 具体改造 | 代码状态 |
+| --- | --- | --- |
+| 生成任务异步化与可恢复 | 将长耗时生成改为后台任务，持久化 `pending / running / succeeded / failed` 状态；同一应用复用运行中任务，刷新后恢复进度，并在生成物可预览后才标记成功 | [开发分支已提交](https://github.com/Li-Jinan/code-ai-agent/commit/9a37a62) · [结果校验](https://github.com/Li-Jinan/code-ai-agent/commit/2c1dbbe) |
+| Vue 工程生成可靠性 | 将 Vue 生成改为请求级会话内存，隔离 Redis 中残留的工具调用上下文，并识别工具调用协议异常 | [开发分支已提交](https://github.com/Li-Jinan/code-ai-agent/commit/aa77392) |
+| 工具输出与上下文控制 | 目录读取跳过 `node_modules` 等大目录，限制条目数与输出长度，补充路径穿越校验和单元测试，避免工具输出撑爆上下文 | [开发分支已提交](https://github.com/Li-Jinan/code-ai-agent/commit/ea5783b) |
+| 异步监控上下文传递 | 将流式回调跨线程后的监控上下文由 `ThreadLocal` 改为随模型请求 `attributes` 传递，并增加空值兜底 | [开发分支已提交](https://github.com/Li-Jinan/code-ai-agent/commit/ea5783b) |
+| 微服务部署与登录 | 以 Docker Compose 编排 MySQL、Redis、Nacos、Selenium 和三个 Dubbo 服务，增加健康检查、Nginx 统一入口、邮箱验证码登录与 IP 限流 | 正在整理为下一次公开合入；默认 `main` 尚未包含该部分源码 |
+
+> 默认 `main` 展示当前公开稳定版本；上述已提交的生成链路改造位于 [`codex/user-avatar-email-profile`](https://github.com/Li-Jinan/code-ai-agent/tree/codex/user-avatar-email-profile) 开发分支。README 不将未合入 `main` 的实现描述为默认分支既有能力。
+
 ## 项目亮点
 
 | 多模式生成 | 交互式迭代 | 完整交付闭环 |
