@@ -20,11 +20,13 @@ public interface UserService extends IService<User> {
      * 用户注册
      *
      * @param userAccount   用户账户
+     * @param userEmail     用户邮箱
+     * @param userName      用户昵称
      * @param userPassword  用户密码
      * @param checkPassword 校验密码
      * @return 新用户 id
      */
-    long userRegister(String userAccount, String userPassword, String checkPassword);
+    long userRegister(String userAccount, String userEmail, String userName, String userPassword, String checkPassword);
 
     /**
      * 获取脱敏的已登录用户信息
@@ -36,12 +38,42 @@ public interface UserService extends IService<User> {
     /**
      * 用户登录
      *
-     * @param userAccount  用户账户
+     * @param userAccount  用户账户或邮箱
      * @param userPassword 用户密码
      * @param request
      * @return 脱敏后的用户信息
      */
     LoginUserVO userLogin(String userAccount, String userPassword, HttpServletRequest request);
+
+    /**
+     * 发送邮箱登录验证码
+     *
+     * @param userEmail 用户邮箱
+     * @param codePurpose 验证码用途
+     * @return 是否发送成功
+     */
+    boolean sendEmailLoginCode(String userEmail, String codePurpose);
+
+    /**
+     * 邮箱验证码登录
+     *
+     * @param userEmail 用户邮箱
+     * @param emailCode 邮箱验证码
+     * @param request
+     * @return 脱敏后的用户信息
+     */
+    LoginUserVO userEmailCodeLogin(String userEmail, String emailCode, HttpServletRequest request);
+
+    /**
+     * 通过邮箱验证码重置密码
+     */
+    boolean resetPassword(String userEmail, String emailCode, String newPassword, String checkPassword);
+
+    /**
+     * 当前登录用户校验原密码后修改密码
+     */
+    boolean updatePassword(String oldPassword, String newPassword, String checkPassword,
+                           HttpServletRequest request);
 
     /**
      * 获取当前登录用户

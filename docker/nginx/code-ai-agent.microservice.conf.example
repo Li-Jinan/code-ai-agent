@@ -1,0 +1,81 @@
+# Main application: Vue frontend and the unified /api gateway.
+server {
+    listen 80;
+    server_name agent.example.com;
+
+    # After DNS is ready, issue HTTPS certs and redirect HTTP to HTTPS.
+    # return 301 https://$host$request_uri;
+
+    client_max_body_size 50m;
+
+    location / {
+        proxy_pass http://127.0.0.1:18080;
+        proxy_http_version 1.1;
+        proxy_buffering off;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+        proxy_set_header Connection "";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+
+# Isolated origin for AI-generated sites. This port exposes no backend API.
+server {
+    listen 80;
+    server_name preview.example.com;
+
+    # return 301 https://$host$request_uri;
+
+    location / {
+        proxy_pass http://127.0.0.1:18081;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+
+# HTTPS example after certificates are issued:
+#
+# server {
+#     listen 443 ssl http2;
+#     server_name agent.example.com;
+#
+#     ssl_certificate /etc/letsencrypt/live/agent.example.com/fullchain.pem;
+#     ssl_certificate_key /etc/letsencrypt/live/agent.example.com/privkey.pem;
+#     client_max_body_size 50m;
+#
+#     location / {
+#         proxy_pass http://127.0.0.1:18080;
+#         proxy_http_version 1.1;
+#         proxy_buffering off;
+#         proxy_read_timeout 3600s;
+#         proxy_send_timeout 3600s;
+#         proxy_set_header Connection "";
+#         proxy_set_header Host $host;
+#         proxy_set_header X-Real-IP $remote_addr;
+#         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+#         proxy_set_header X-Forwarded-Proto https;
+#     }
+# }
+#
+# server {
+#     listen 443 ssl http2;
+#     server_name preview.example.com;
+#
+#     ssl_certificate /etc/letsencrypt/live/preview.example.com/fullchain.pem;
+#     ssl_certificate_key /etc/letsencrypt/live/preview.example.com/privkey.pem;
+#
+#     location / {
+#         proxy_pass http://127.0.0.1:18081;
+#         proxy_http_version 1.1;
+#         proxy_set_header Host $host;
+#         proxy_set_header X-Real-IP $remote_addr;
+#         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+#         proxy_set_header X-Forwarded-Proto https;
+#     }
+# }

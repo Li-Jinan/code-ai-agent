@@ -16,11 +16,13 @@ import com.jinan.codeaiagent.exception.ErrorCode;
 import com.jinan.codeaiagent.exception.ThrowUtils;
 import com.jinan.codeaiagent.model.dto.app.*;
 import com.jinan.codeaiagent.model.entity.User;
+import com.jinan.codeaiagent.model.entity.GenerationTask;
 import com.jinan.codeaiagent.model.vo.AppVO;
 import com.jinan.codeaiagent.ratelimter.annotation.RateLimit;
 import com.jinan.codeaiagent.ratelimter.enums.RateLimitType;
 import com.jinan.codeaiagent.service.ProjectDownloadService;
 import com.jinan.codeaiagent.service.UserService;
+import com.jinan.codeaiagent.service.GenerationTaskService;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -30,6 +32,7 @@ import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.web.bind.annotation.*;
 import com.jinan.codeaiagent.model.entity.App;
 import com.jinan.codeaiagent.service.AppService;
+import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
@@ -44,6 +47,7 @@ import java.util.Map;
  */
 @RestController
 @RequestMapping("/app")
+@Slf4j
 public class AppController {
 
     @Resource
@@ -54,6 +58,9 @@ public class AppController {
 
     @Resource
     private ProjectDownloadService projectDownloadService;
+
+    @Resource
+    private GenerationTaskService generationTaskService;
 
     @GetMapping(value = "/chat/gen/code", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     @RateLimit(limitType = RateLimitType.USER, rate = 5, rateInterval = 60, message = "AI 对话请求过于频繁，请稍后再试")
@@ -75,6 +82,18 @@ public class AppController {
                             .data(jsonData)
                             .build();
                 })
+                .onErrorResume(error -> {
+                    log.error("生成代码 SSE 流异常，appId: {}", appId, error);
+                    Map<String, Object> errorData = Map.of(
+                            "error", true,
+                            "code", ErrorCode.SYSTEM_ERROR.getCode(),
+                            "message", getFriendlyGenerationErrorMessage(error)
+                    );
+                    return Flux.just(ServerSentEvent.<String>builder()
+                            .event("business-error")
+                            .data(JSONUtil.toJsonStr(errorData))
+                            .build());
+                })
                 .concatWith(Mono.just(
                         // 发送结束事件
                         ServerSentEvent.<String>builder()
@@ -82,6 +101,44 @@ public class AppController {
                                 .data("")
                                 .build()
                 ));
+    }
+
+    private String getFriendlyGenerationErrorMessage(Throwable error) {
+        String message = error == null ? "" : error.getMessage();
+        if (message != null && StrUtil.containsAny(message, "Messages with role", "tool_calls", "invalid_request_error")) {
+            return "生成上下文异常，请点击重试。";
+        }
+        if (message != null && StrUtil.containsAny(message, "JsonParseException", "Unexpected character")) {
+            return "AI 返回格式异常，请点击重试。";
+        }
+        return "生成过程中出现异常，请点击重试。";
+    }
+
+    @PostMapping("/chat/gen/task")
+    public BaseResponse<GenerationTask> startGenerationTask(@RequestBody GenerationTaskCreateRequest requestBody,
+                                                            HttpServletRequest request) {
+        ThrowUtils.throwIf(requestBody == null, ErrorCode.PARAMS_ERROR);
+        User loginUser = userService.getLoginUser(request);
+        GenerationTask task = generationTaskService.startGenerationTask(
+                requestBody.getAppId(),
+                requestBody.getMessage(),
+                loginUser
+        );
+        return ResultUtils.success(task);
+    }
+
+    @GetMapping("/chat/gen/task/{taskId}")
+    public BaseResponse<GenerationTask> getGenerationTask(@PathVariable Long taskId, HttpServletRequest request) {
+        User loginUser = userService.getLoginUser(request);
+        GenerationTask task = generationTaskService.getTask(taskId, loginUser);
+        return ResultUtils.success(task);
+    }
+
+    @GetMapping("/chat/gen/task/latest")
+    public BaseResponse<GenerationTask> getLatestGenerationTask(@RequestParam Long appId, HttpServletRequest request) {
+        User loginUser = userService.getLoginUser(request);
+        GenerationTask task = generationTaskService.getLatestTask(appId, loginUser);
+        return ResultUtils.success(task);
     }
 
     /**
@@ -280,6 +337,27 @@ public class AppController {
         // 分页查询
         Page<App> appPage = appService.page(Page.of(pageNum, pageSize), queryWrapper);
         // 数据封装
+        Page<AppVO> appVOPage = new Page<>(pageNum, pageSize, appPage.getTotalRow());
+        List<AppVO> appVOList = appService.getAppVOList(appPage.getRecords());
+        appVOPage.setRecords(appVOList);
+        return ResultUtils.success(appVOPage);
+    }
+
+    /**
+     * 分页获取公开已部署应用列表
+     *
+     * @param appQueryRequest 查询请求
+     * @return 公开应用列表
+     */
+    @PostMapping("/public/list/page/vo")
+    public BaseResponse<Page<AppVO>> listPublicDeployedAppVOByPage(@RequestBody AppQueryRequest appQueryRequest) {
+        ThrowUtils.throwIf(appQueryRequest == null, ErrorCode.PARAMS_ERROR);
+        long pageSize = appQueryRequest.getPageSize();
+        ThrowUtils.throwIf(pageSize > 20, ErrorCode.PARAMS_ERROR, "每页最多查询 20 个应用");
+        long pageNum = appQueryRequest.getPageNum();
+        QueryWrapper queryWrapper = appService.getQueryWrapper(appQueryRequest)
+                .ne("deployKey", "");
+        Page<App> appPage = appService.page(Page.of(pageNum, pageSize), queryWrapper);
         Page<AppVO> appVOPage = new Page<>(pageNum, pageSize, appPage.getTotalRow());
         List<AppVO> appVOList = appService.getAppVOList(appPage.getRecords());
         appVOPage.setRecords(appVOList);

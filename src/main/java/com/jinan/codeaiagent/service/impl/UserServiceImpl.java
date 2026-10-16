@@ -15,12 +15,20 @@ import com.jinan.codeaiagent.model.vo.LoginUserVO;
 import com.jinan.codeaiagent.model.vo.UserVO;
 import com.jinan.codeaiagent.service.UserService;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.annotation.Resource;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.mail.SimpleMailMessage;
+import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
 import org.springframework.util.DigestUtils;
 
 import java.nio.charset.StandardCharsets;
+import java.security.SecureRandom;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.stream.Collectors;
 
 import static com.jinan.codeaiagent.constant.UserConstant.USER_LOGIN_STATE;
@@ -32,14 +40,37 @@ import static com.jinan.codeaiagent.constant.UserConstant.USER_LOGIN_STATE;
 @Service
 public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements UserService {
 
+    private static final String EMAIL_PATTERN = "^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$";
+    private static final String DEFAULT_USER_AVATAR = "/userAvatar.svg";
+    private static final String DEFAULT_USER_NAME = "新用户";
+    private static final String EMAIL_CODE_KEY_PREFIX = "code-ai-agent:user:email-code:";
+    private static final String EMAIL_CODE_LIMIT_KEY_PREFIX = "code-ai-agent:user:email-code-limit:";
+    private static final String CODE_PURPOSE_LOGIN = "login";
+    private static final String CODE_PURPOSE_RESET_PASSWORD = "resetPassword";
+    private static final Duration EMAIL_CODE_TTL = Duration.ofMinutes(5);
+    private static final Duration EMAIL_CODE_SEND_INTERVAL = Duration.ofSeconds(60);
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+
+    @Resource
+    private StringRedisTemplate stringRedisTemplate;
+
+    @Resource
+    private JavaMailSender javaMailSender;
+
+    @Value("${spring.mail.username:}")
+    private String mailFrom;
+
     @Override
-    public long userRegister(String userAccount, String userPassword, String checkPassword) {
+    public long userRegister(String userAccount, String userEmail, String userName, String userPassword, String checkPassword) {
         // 1. 校验参数
-        if (StrUtil.hasBlank(userAccount, userPassword, checkPassword)) {
+        if (StrUtil.hasBlank(userAccount, userEmail, userPassword, checkPassword)) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "参数为空");
         }
         if (userAccount.length() < 4) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "账号长度过短");
+        }
+        if (!isEmail(userEmail)) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "邮箱格式不正确");
         }
         if (userPassword.length() < 8 || checkPassword.length() < 8) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "密码长度过短");
@@ -54,13 +85,21 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         if (count > 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "账号重复");
         }
+        QueryWrapper emailQueryWrapper = new QueryWrapper();
+        emailQueryWrapper.eq("userEmail", userEmail);
+        long emailCount = this.mapper.selectCountByQuery(emailQueryWrapper);
+        if (emailCount > 0) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "邮箱已被注册");
+        }
         // 3. 加密密码
         String encryptPassword = getEncryptPassword(userPassword);
         // 4. 创建用户，插入数据库
         User user = new User();
         user.setUserAccount(userAccount);
+        user.setUserEmail(userEmail);
         user.setUserPassword(encryptPassword);
-        user.setUserName("无名");
+        user.setUserName(StrUtil.blankToDefault(userName, DEFAULT_USER_NAME).trim());
+        user.setUserAvatar(DEFAULT_USER_AVATAR);
         user.setUserRole(UserRoleEnum.USER.getValue());
         boolean saveResult = this.save(user);
         if (!saveResult) {
@@ -95,16 +134,137 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         String encryptPassword = getEncryptPassword(userPassword);
         // 3. 查询用户是否存在
         QueryWrapper queryWrapper = new QueryWrapper();
-        queryWrapper.eq("userAccount", userAccount);
-        queryWrapper.eq("userPassword", encryptPassword);
+        if (isEmail(userAccount)) {
+            queryWrapper.eq("userEmail", userAccount);
+        } else {
+            queryWrapper.eq("userAccount", userAccount);
+        }
         User user = this.mapper.selectOneByQuery(queryWrapper);
-        if (user == null) {
+        if (user == null || !isPasswordMatched(userPassword, encryptPassword, user.getUserPassword())) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "用户不存在或密码错误");
+        }
+        if (!encryptPassword.equals(user.getUserPassword())) {
+            user.setUserPassword(encryptPassword);
+            this.updateById(user);
         }
         // 4. 如果用户存在，记录用户的登录态
         request.getSession().setAttribute(USER_LOGIN_STATE, user);
         // 5. 返回脱敏的用户信息
         return this.getLoginUserVO(user);
+    }
+
+    @Override
+    public boolean sendEmailLoginCode(String userEmail, String codePurpose) {
+        if (!isEmail(userEmail)) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "邮箱格式不正确");
+        }
+        if (StrUtil.isBlank(mailFrom)) {
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "邮件发送账号未配置");
+        }
+        String normalizedEmail = userEmail.trim();
+        String normalizedPurpose = normalizeCodePurpose(codePurpose);
+        if (CODE_PURPOSE_RESET_PASSWORD.equals(normalizedPurpose)) {
+            User user = this.mapper.selectOneByQuery(QueryWrapper.create().eq("userEmail", normalizedEmail));
+            if (user == null) {
+                throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "该邮箱尚未绑定账号");
+            }
+        }
+        String limitKey = getEmailCodeLimitKey(normalizedEmail, normalizedPurpose);
+        Boolean canSend = stringRedisTemplate.opsForValue()
+                .setIfAbsent(limitKey, "1", EMAIL_CODE_SEND_INTERVAL);
+        if (Boolean.FALSE.equals(canSend)) {
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "验证码发送太频繁，请稍后再试");
+        }
+        String code = String.format("%06d", SECURE_RANDOM.nextInt(1000000));
+        String codeKey = getEmailCodeKey(normalizedEmail, normalizedPurpose);
+        stringRedisTemplate.opsForValue().set(codeKey, code, EMAIL_CODE_TTL);
+        try {
+            SimpleMailMessage message = new SimpleMailMessage();
+            message.setFrom(mailFrom);
+            message.setTo(normalizedEmail);
+            String sceneText = CODE_PURPOSE_RESET_PASSWORD.equals(normalizedPurpose)
+                    ? "重置账号密码"
+                    : "登录或注册账号";
+            message.setSubject("今安 AI 应用验证码");
+            message.setText("【今安 AI 应用】您正在" + sceneText + "，验证码 " + code
+                    + "，5 分钟内有效。请勿向任何人泄露，非本人操作请忽略。");
+            javaMailSender.send(message);
+            return true;
+        } catch (Exception e) {
+            stringRedisTemplate.delete(codeKey);
+            stringRedisTemplate.delete(limitKey);
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "验证码发送失败，请检查邮箱配置");
+        }
+    }
+
+    @Override
+    public LoginUserVO userEmailCodeLogin(String userEmail, String emailCode, HttpServletRequest request) {
+        if (!isEmail(userEmail) || StrUtil.isBlank(emailCode)) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "参数错误");
+        }
+        String normalizedEmail = userEmail.trim();
+        String codeKey = getEmailCodeKey(normalizedEmail, CODE_PURPOSE_LOGIN);
+        String cachedCode = stringRedisTemplate.opsForValue().get(codeKey);
+        if (StrUtil.isBlank(cachedCode) || !cachedCode.equals(emailCode.trim())) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "验证码错误或已过期");
+        }
+        QueryWrapper queryWrapper = QueryWrapper.create().eq("userEmail", normalizedEmail);
+        User user = this.mapper.selectOneByQuery(queryWrapper);
+        if (user == null) {
+            user = createEmailUser(normalizedEmail);
+        }
+        stringRedisTemplate.delete(codeKey);
+        request.getSession().setAttribute(USER_LOGIN_STATE, user);
+        return this.getLoginUserVO(user);
+    }
+
+    @Override
+    public boolean resetPassword(String userEmail, String emailCode, String newPassword, String checkPassword) {
+        if (!isEmail(userEmail) || StrUtil.isBlank(emailCode)) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "邮箱或验证码错误");
+        }
+        validateNewPassword(newPassword, checkPassword);
+        String normalizedEmail = userEmail.trim();
+        String codeKey = getEmailCodeKey(normalizedEmail, CODE_PURPOSE_RESET_PASSWORD);
+        String cachedCode = stringRedisTemplate.opsForValue().get(codeKey);
+        if (StrUtil.isBlank(cachedCode) || !cachedCode.equals(emailCode.trim())) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "验证码错误或已过期");
+        }
+        User user = this.mapper.selectOneByQuery(QueryWrapper.create().eq("userEmail", normalizedEmail));
+        if (user == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "该邮箱尚未绑定账号");
+        }
+        user.setUserPassword(getEncryptPassword(newPassword));
+        boolean updated = this.updateById(user);
+        if (!updated) {
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "密码重置失败");
+        }
+        stringRedisTemplate.delete(codeKey);
+        return true;
+    }
+
+    @Override
+    public boolean updatePassword(String oldPassword, String newPassword, String checkPassword,
+                                  HttpServletRequest request) {
+        if (StrUtil.isBlank(oldPassword)) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "请输入原密码");
+        }
+        validateNewPassword(newPassword, checkPassword);
+        if (oldPassword.equals(newPassword)) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "新密码不能与原密码相同");
+        }
+        User user = getLoginUser(request);
+        String encryptedOldPassword = getEncryptPassword(oldPassword);
+        if (!isPasswordMatched(oldPassword, encryptedOldPassword, user.getUserPassword())) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "原密码不正确");
+        }
+        user.setUserPassword(getEncryptPassword(newPassword));
+        boolean updated = this.updateById(user);
+        if (!updated) {
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "密码修改失败");
+        }
+        request.getSession().setAttribute(USER_LOGIN_STATE, user);
+        return true;
     }
 
     @Override
@@ -163,6 +323,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         }
         Long id = userQueryRequest.getId();
         String userAccount = userQueryRequest.getUserAccount();
+        String userEmail = userQueryRequest.getUserEmail();
         String userName = userQueryRequest.getUserName();
         String userProfile = userQueryRequest.getUserProfile();
         String userRole = userQueryRequest.getUserRole();
@@ -172,6 +333,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
                 .eq("id", id) // where id = ${id}
                 .eq("userRole", userRole) // and userRole = ${userRole}
                 .like("userAccount", userAccount)
+                .like("userEmail", userEmail)
                 .like("userName", userName)
                 .like("userProfile", userProfile)
                 .orderBy(sortField, "ascend".equals(sortOrder));
@@ -182,5 +344,96 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         // 盐值，混淆密码
         final String SALT = "jinan";
         return DigestUtils.md5DigestAsHex((userPassword + SALT).getBytes(StandardCharsets.UTF_8));
+    }
+
+    private boolean isPasswordMatched(String rawPassword, String currentEncryptPassword, String storedPassword) {
+        if (currentEncryptPassword.equals(storedPassword)) {
+            return true;
+        }
+        return getLegacyEncryptPassword(rawPassword).equals(storedPassword);
+    }
+
+    private String getLegacyEncryptPassword(String userPassword) {
+        final String LEGACY_SALT = "yupi";
+        return DigestUtils.md5DigestAsHex((userPassword + LEGACY_SALT).getBytes(StandardCharsets.UTF_8));
+    }
+
+    private boolean isEmail(String value) {
+        return StrUtil.isNotBlank(value) && value.matches(EMAIL_PATTERN);
+    }
+
+    private void validateNewPassword(String newPassword, String checkPassword) {
+        if (StrUtil.hasBlank(newPassword, checkPassword)) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "请输入新密码和确认密码");
+        }
+        if (newPassword.length() < 8 || checkPassword.length() < 8) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "密码长度不能少于 8 位");
+        }
+        if (!newPassword.equals(checkPassword)) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "两次输入的密码不一致");
+        }
+    }
+
+    private String normalizeCodePurpose(String codePurpose) {
+        String purpose = StrUtil.blankToDefault(codePurpose, CODE_PURPOSE_LOGIN).trim();
+        if (CODE_PURPOSE_LOGIN.equals(purpose) || CODE_PURPOSE_RESET_PASSWORD.equals(purpose)) {
+            return purpose;
+        }
+        throw new BusinessException(ErrorCode.PARAMS_ERROR, "不支持的验证码用途");
+    }
+
+    private String getEmailCodeKey(String userEmail, String codePurpose) {
+        return EMAIL_CODE_KEY_PREFIX + codePurpose + ":" + userEmail;
+    }
+
+    private String getEmailCodeLimitKey(String userEmail, String codePurpose) {
+        return EMAIL_CODE_LIMIT_KEY_PREFIX + codePurpose + ":" + userEmail;
+    }
+
+    private User createEmailUser(String userEmail) {
+        String normalizedEmail = userEmail.trim();
+        User user = new User();
+        user.setUserAccount(generateEmailUserAccount(normalizedEmail));
+        user.setUserEmail(normalizedEmail);
+        user.setUserPassword(getEncryptPassword(generateRandomPassword()));
+        user.setUserName(buildDefaultEmailUserName(normalizedEmail));
+        user.setUserAvatar(DEFAULT_USER_AVATAR);
+        user.setUserRole(UserRoleEnum.USER.getValue());
+        boolean saveResult = this.save(user);
+        if (!saveResult) {
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "账号创建失败，请稍后重试");
+        }
+        return user;
+    }
+
+    private String generateEmailUserAccount(String userEmail) {
+        String localPart = userEmail.substring(0, userEmail.indexOf('@'))
+                .toLowerCase(Locale.ROOT)
+                .replaceAll("[^a-z0-9_]", "");
+        String baseAccount = StrUtil.blankToDefault(localPart, "emailuser");
+        if (baseAccount.length() < 4) {
+            baseAccount = baseAccount + "user";
+        }
+        baseAccount = StrUtil.sub(baseAccount, 0, Math.min(baseAccount.length(), 20));
+        String candidate = baseAccount;
+        int retry = 0;
+        while (this.mapper.selectCountByQuery(QueryWrapper.create().eq("userAccount", candidate)) > 0) {
+            candidate = baseAccount + String.format("%04d", SECURE_RANDOM.nextInt(10000));
+            retry++;
+            if (retry > 10) {
+                candidate = "emailuser" + System.currentTimeMillis();
+                break;
+            }
+        }
+        return candidate;
+    }
+
+    private String buildDefaultEmailUserName(String userEmail) {
+        String localPart = userEmail.substring(0, userEmail.indexOf('@'));
+        return StrUtil.blankToDefault(localPart, DEFAULT_USER_NAME);
+    }
+
+    private String generateRandomPassword() {
+        return "Email@" + System.currentTimeMillis() + SECURE_RANDOM.nextInt(1000000);
     }
 }

@@ -1,0 +1,1 @@
+17 3 * * * root /opt/code-ai-agent/scripts/renew-letsencrypt.sh >> /var/log/code-ai-agent-cert-renew.log 2>&1

@@ -7,8 +7,7 @@ import cn.hutool.core.util.RandomUtil;
 import cn.hutool.core.util.StrUtil;
 import com.mybatisflex.core.query.QueryWrapper;
 import com.mybatisflex.spring.service.impl.ServiceImpl;
-import com.jinan.codeaiagent.ai.AiCodeGenTypeRoutingService;
-import com.jinan.codeaiagent.ai.AiCodeGenTypeRoutingServiceFactory;
+import com.jinan.codeaiagent.ai.CodeGenTypeRoutingManager;
 import com.jinan.codeaiagent.constant.AppConstant;
 import com.jinan.codeaiagent.core.AiCodeGeneratorFacade;
 import com.jinan.codeaiagent.core.builder.VueProjectBuilder;
@@ -57,6 +56,9 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
     @Value("${code.deploy-host:http://localhost}")
     private String deployHost;
 
+    @Value("${code.internal-deploy-host:${code.deploy-host:http://localhost}}")
+    private String internalDeployHost;
+
     @DubboReference
     private InnerUserService userService;
 
@@ -76,7 +78,7 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
     private InnerScreenshotService screenshotService;
 
     @Resource
-    private AiCodeGenTypeRoutingServiceFactory aiCodeGenTypeRoutingServiceFactory;
+    private CodeGenTypeRoutingManager codeGenTypeRoutingManager;
 
     @Override
     public Flux<String> chatToGenCode(Long appId, String message, User loginUser) {
@@ -115,9 +117,8 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         app.setUserId(loginUser.getId());
         // 应用名称暂时为 initPrompt 前 12 位
         app.setAppName(initPrompt.substring(0, Math.min(initPrompt.length(), 12)));
-        // 使用 AI 智能选择代码生成类型（多例模式）
-        AiCodeGenTypeRoutingService aiCodeGenTypeRoutingService = aiCodeGenTypeRoutingServiceFactory.createAiCodeGenTypeRoutingService();
-        CodeGenTypeEnum selectedCodeGenType = aiCodeGenTypeRoutingService.routeCodeGenType(initPrompt);
+        // 优先使用 AI 选择生成类型；模型不可用时自动降级到本地规则。
+        CodeGenTypeEnum selectedCodeGenType = codeGenTypeRoutingManager.route(initPrompt);
         app.setCodeGenType(selectedCodeGenType.getValue());
         // 插入数据库
         boolean result = this.save(app);
@@ -168,7 +169,10 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         // 8. 复制文件到部署目录
         String deployDirPath = AppConstant.CODE_DEPLOY_ROOT_DIR + File.separator + deployKey;
         try {
-            FileUtil.copyContent(sourceDir, new File(deployDirPath), true);
+            // Hutool 的 copyContent 不会可靠地为文件目标创建父目录。
+            // 首次部署时必须先显式创建目录，否则会在复制 index.html 时抛出 NoSuchFileException。
+            File deployDir = FileUtil.mkdir(deployDirPath);
+            FileUtil.copyContent(sourceDir, deployDir, true);
         } catch (Exception e) {
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "应用部署失败：" + e.getMessage());
         }
@@ -182,7 +186,8 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         // 10. 构建应用访问 URL
         String appDeployUrl = String.format("%s/%s/", StrUtil.removeSuffix(deployHost, "/"), deployKey);
         // 11. 异步生成截图并且更新应用封面
-        generateAppScreenshotAsync(appId, appDeployUrl);
+        String internalAppUrl = String.format("%s/%s/", StrUtil.removeSuffix(internalDeployHost, "/"), deployKey);
+        generateAppScreenshotAsync(appId, internalAppUrl);
         return appDeployUrl;
     }
 

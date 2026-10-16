@@ -8,6 +8,8 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Scope;
 
+import java.time.Duration;
+
 /**
  * 智能路由模型配置
  */
@@ -26,6 +28,9 @@ public class RoutingAiModelConfig {
 
     private Double temperature;
 
+    /** 路由失败会降级到本地规则，因此不应长时间阻塞应用创建。 */
+    private Duration timeout = Duration.ofSeconds(15);
+
     private Boolean logRequests = false;
 
     private Boolean logResponses = false;
@@ -42,6 +47,7 @@ public class RoutingAiModelConfig {
                 .baseUrl(baseUrl)
                 .maxTokens(maxTokens)
                 .temperature(temperature)
+                .timeout(timeout)
                 .logRequests(logRequests)
                 .logResponses(logResponses)
                 .build();

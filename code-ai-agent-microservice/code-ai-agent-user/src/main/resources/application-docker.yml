@@ -1,0 +1,30 @@
+spring:
+  datasource:
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME:root}
+    password: ${SPRING_DATASOURCE_PASSWORD}
+  data:
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST:redis}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
+      password: ${SPRING_DATA_REDIS_PASSWORD}
+  mail:
+    host: ${MAIL_HOST:smtp.qq.com}
+    port: ${MAIL_PORT:465}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+
+server:
+  forward-headers-strategy: framework
+
+dubbo:
+  registry:
+    address: ${DUBBO_REGISTRY_ADDRESS:nacos://nacos:8848}
+  protocol:
+    host: ${DUBBO_PROTOCOL_HOST:user-service}
+
+demo:
+  account:
+    enabled: ${DEMO_ACCOUNT_ENABLED:true}
+    username: ${DEMO_ACCOUNT_USERNAME:demo}
+    password: ${DEMO_ACCOUNT_PASSWORD:demo123456}

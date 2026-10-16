@@ -14,6 +14,19 @@ spring:
       database: 0
       password: <your-redis-password>
       ttl: 3600
+  # mail
+  mail:
+    host: ${MAIL_HOST:smtp.qq.com}
+    port: ${MAIL_PORT:465}
+    username: ${MAIL_USERNAME:<your-mail-address>}
+    password: ${MAIL_PASSWORD:<your-mail-auth-code>}
+    protocol: smtps
+    properties:
+      mail:
+        smtp:
+          auth: true
+          ssl:
+            enable: true
 server:
   port: 8123
   servlet:
@@ -46,9 +59,9 @@ langchain4j:
       log-responses: false
     # 智能路由 AI 模型配置
     routing-chat-model:
-      base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
+      base-url: https://api.deepseek.com
       api-key: <your-api-key>
-      model-name: qwen-turbo
+      model-name: deepseek-chat
       max-tokens: 100
       log-requests: false
       log-responses: false
@@ -79,4 +92,4 @@ knife4j:
     password: 123456
 # 部署路径
 code:
-  deploy-host: http://<your-server-ip>/dist
+  deploy-host: https://preview.your-domain.com

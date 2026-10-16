@@ -173,12 +173,41 @@
         </div>
         <div class="preview-content">
           <div v-if="!previewUrl && !isGenerating" class="preview-placeholder">
-            <div class="placeholder-icon">🌐</div>
-            <p>网站文件生成完成后将在这里展示</p>
+            <template v-if="canResumeGeneration">
+              <div class="placeholder-icon">⏳</div>
+              <h4>这个作品还没有生成完成</h4>
+              <p>检测到上一次生成可能被中断，可以继续使用最后一条需求恢复生成。</p>
+              <a-button type="primary" @click="resumeLastGeneration">继续生成</a-button>
+            </template>
+            <template v-else>
+              <div class="placeholder-icon">🌐</div>
+              <h4>等待生成作品</h4>
+              <p>网站文件生成完成后将在这里展示</p>
+            </template>
           </div>
           <div v-else-if="isGenerating" class="preview-loading">
-            <a-spin size="large" />
-            <p>正在生成网站...</p>
+            <div class="generation-panel">
+              <a-spin size="large" />
+              <h4>{{ generationPhaseTitle }}</h4>
+              <p>{{ generationPhaseDescription }}</p>
+              <div class="generation-progress">
+                <div
+                    v-for="(step, index) in generationSteps"
+                    :key="step"
+                    class="generation-step"
+                    :class="{
+                      'generation-step--active': index === generationStepIndex,
+                      'generation-step--done': index < generationStepIndex,
+                    }"
+                >
+                  <span>{{ index + 1 }}</span>
+                  <strong>{{ step }}</strong>
+                </div>
+              </div>
+              <div class="generation-note">
+                已等待 {{ generationElapsedSeconds }} 秒。生成通常需要 1-2 分钟，期间可以停留在此页等待预览自动出现。
+              </div>
+            </div>
           </div>
           <iframe
               v-else
@@ -204,7 +233,6 @@
     <DeploySuccessModal
         v-model:open="deployModalVisible"
         :deploy-url="deployUrl"
-        @open-site="openDeployedSite"
     />
   </div>
 </template>
@@ -218,6 +246,9 @@ import {
   getAppVoById,
   deployApp as deployAppApi,
   deleteApp as deleteAppApi,
+  startGenerationTask,
+  getGenerationTask,
+  getLatestGenerationTask,
 } from '@/api/appController'
 import { listAppChatHistory } from '@/api/chatHistoryController'
 import { CodeGenTypeEnum, formatCodeGenType } from '@/utils/codeGenTypes'
@@ -227,9 +258,9 @@ import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
 import AppDetailModal from '@/components/AppDetailModal.vue'
 import DeploySuccessModal from '@/components/DeploySuccessModal.vue'
 import aiAvatar from '@/assets/treeAvatar.svg'
-import defaultUserAvatar from '@/assets/userAvatar.svg'
-import { API_BASE_URL, getStaticPreviewUrl } from '@/config/env'
+import { getStaticPreviewUrl, normalizeDeployUrl } from '@/config/env'
 import { VisualEditor, type ElementInfo } from '@/utils/visualEditor'
+import { getAvatarUrl } from '@/utils/avatar'
 
 import {
   CloudUploadOutlined,
@@ -260,6 +291,16 @@ const messages = ref<Message[]>([])
 const userInput = ref('')
 const isGenerating = ref(false)
 const messagesContainer = ref<HTMLElement>()
+const RECENT_GENERATION_KEY = 'code-ai-agent:recent-generation'
+const latestGenerationTask = ref<API.GenerationTask | null>(null)
+
+interface RecentGeneration {
+  appId: string
+  prompt: string
+  appName: string
+  status: 'creating' | 'generating' | 'failed' | 'preview-ready'
+  updatedAt: number
+}
 
 // 对话历史相关
 const loadingHistory = ref(false)
@@ -270,6 +311,59 @@ const historyLoaded = ref(false)
 // 预览相关
 const previewUrl = ref('')
 const previewReady = ref(false)
+const generationStepIndex = ref(0)
+const generationElapsedSeconds = ref(0)
+let generationTimer: number | undefined
+
+const generationSteps = ['连接生成服务', 'AI 编写页面代码', '保存网站文件', '准备右侧预览']
+
+const generationPhaseTitle = computed(() => generationSteps[generationStepIndex.value] || '正在生成网站')
+const generationPhaseDescription = computed(() => {
+  const descriptions = [
+    '正在提交后台生成任务，离开此页也会继续执行。',
+    '后台正在根据你的需求生成页面结构、样式和交互代码。',
+    '后台正在保存网站文件并完成构建。',
+    '正在刷新应用信息，预览马上会出现在右侧。',
+  ]
+  return descriptions[generationStepIndex.value] || descriptions[1]
+})
+
+const isFailedAiMessage = (content?: string) => {
+  if (!content) {
+    return false
+  }
+  return (
+      content.includes('AI回复失败') ||
+      content.includes('生成失败') ||
+      content.includes('JsonParseException') ||
+      content.includes('Unexpected character') ||
+      content.includes('系统错误')
+  )
+}
+
+const normalizeAiHistoryMessage = (content: string) => {
+  if (!isFailedAiMessage(content)) {
+    return content
+  }
+  return '❌ 生成失败：AI 返回格式异常，请点击重试。'
+}
+
+const hasSuccessfulGeneratedMessage = computed(() => {
+  return messages.value.some((item) => item.type === 'ai' && item.content && !isFailedAiMessage(item.content))
+})
+
+const latestTaskFailed = computed(() => latestGenerationTask.value?.status === 'failed')
+
+const canResumeGeneration = computed(() => {
+  if (!isOwner.value || isGenerating.value || messages.value.length === 0) {
+    return false
+  }
+  const lastMessage = messages.value[messages.value.length - 1]
+  if (lastMessage?.type === 'user') {
+    return true
+  }
+  return lastMessage?.type === 'ai' && isFailedAiMessage(lastMessage.content)
+})
 
 // 部署相关
 const deploying = ref(false)
@@ -298,7 +392,7 @@ const isAdmin = computed(() => {
 })
 
 const userAvatarSrc = computed(() => {
-  return loginUserStore.loginUser.userAvatar || defaultUserAvatar
+  return getAvatarUrl(loginUserStore.loginUser.userAvatar)
 })
 
 // 应用详情相关
@@ -330,7 +424,10 @@ const loadChatHistory = async (isLoadMore = false) => {
         const historyMessages: Message[] = chatHistories
             .map((chat) => ({
               type: (chat.messageType === 'user' ? 'user' : 'ai') as 'user' | 'ai',
-              content: chat.message || '',
+              content:
+                  chat.messageType === 'ai'
+                      ? normalizeAiHistoryMessage(chat.message || '')
+                      : chat.message || '',
               createTime: chat.createTime,
             }))
             .reverse() // 反转数组，让老消息在前
@@ -363,6 +460,22 @@ const loadMoreHistory = async () => {
   await loadChatHistory(true)
 }
 
+const loadLatestGenerationTask = async () => {
+  if (!appId.value) {
+    latestGenerationTask.value = null
+    return null
+  }
+  try {
+    const res = await getLatestGenerationTask({ appId: appId.value })
+    latestGenerationTask.value = res.data.data || null
+    return latestGenerationTask.value
+  } catch (error) {
+    console.error('加载生成任务状态失败：', error)
+    latestGenerationTask.value = null
+    return null
+  }
+}
+
 // 获取应用信息
 const fetchAppInfo = async () => {
   const id = route.params.id as string
@@ -381,8 +494,12 @@ const fetchAppInfo = async () => {
 
       // 先加载对话历史
       await loadChatHistory()
-      // 如果有至少2条对话记录，展示对应的网站
-      if (messages.value.length >= 2) {
+      const latestTask = await loadLatestGenerationTask()
+      if (latestTask?.status === 'failed') {
+        markRecentGeneration('failed')
+        previewUrl.value = ''
+        previewReady.value = false
+      } else if (hasSuccessfulGeneratedMessage.value && !latestTaskFailed.value) {
         updatePreview()
       }
       // 检查是否需要自动发送初始提示词
@@ -394,6 +511,8 @@ const fetchAppInfo = async () => {
           historyLoaded.value
       ) {
         await sendInitialMessage(appInfo.value.initPrompt)
+      } else {
+        await autoResumeGenerationIfNeeded()
       }
     } else {
       message.error('获取应用信息失败')
@@ -427,7 +546,99 @@ const sendInitialMessage = async (prompt: string) => {
 
   // 开始生成
   isGenerating.value = true
+  markRecentGeneration('generating')
   await generateCode(prompt, aiMessageIndex)
+}
+
+const markRecentGeneration = (status: RecentGeneration['status']) => {
+  if (!appId.value) {
+    return
+  }
+  const payload: RecentGeneration = {
+    appId: String(appId.value),
+    prompt: appInfo.value?.initPrompt || messages.value.find((item) => item.type === 'user')?.content || '',
+    appName: appInfo.value?.appName || '新建应用',
+    status,
+    updatedAt: Date.now(),
+  }
+  localStorage.setItem(RECENT_GENERATION_KEY, JSON.stringify(payload))
+}
+
+const getRecentGeneration = (): RecentGeneration | null => {
+  const raw = localStorage.getItem(RECENT_GENERATION_KEY)
+  if (!raw) {
+    return null
+  }
+  try {
+    return JSON.parse(raw)
+  } catch (error) {
+    console.error('读取最近生成记录失败：', error)
+    localStorage.removeItem(RECENT_GENERATION_KEY)
+    return null
+  }
+}
+
+const startGenerationTimer = () => {
+  generationElapsedSeconds.value = 0
+  if (generationTimer) {
+    window.clearInterval(generationTimer)
+  }
+  generationTimer = window.setInterval(() => {
+    generationElapsedSeconds.value += 1
+    if (generationElapsedSeconds.value > 8 && generationStepIndex.value < 1) {
+      generationStepIndex.value = 1
+    }
+  }, 1000)
+}
+
+const stopGenerationTimer = () => {
+  if (generationTimer) {
+    window.clearInterval(generationTimer)
+    generationTimer = undefined
+  }
+}
+
+const resumeLastGeneration = async () => {
+  const lastUserMessage = [...messages.value].reverse().find((item) => item.type === 'user')
+  if (!lastUserMessage?.content || isGenerating.value) {
+    return
+  }
+  const aiMessageIndex = messages.value.length
+  messages.value.push({
+    type: 'ai',
+    content: '',
+    loading: true,
+  })
+  await nextTick()
+  scrollToBottom()
+  isGenerating.value = true
+  markRecentGeneration('generating')
+  await generateCode(lastUserMessage.content, aiMessageIndex)
+}
+
+const shouldAutoResumeGeneration = () => {
+  if (!isOwner.value || isGenerating.value || hasSuccessfulGeneratedMessage.value) {
+    return false
+  }
+  if (!canResumeGeneration.value) {
+    return false
+  }
+  if (route.query.autoResume === '1') {
+    return true
+  }
+  const recentGeneration = getRecentGeneration()
+  return (
+      recentGeneration?.appId === String(appId.value) &&
+      ['creating', 'generating', 'failed'].includes(recentGeneration.status)
+  )
+}
+
+const autoResumeGenerationIfNeeded = async () => {
+  if (!shouldAutoResumeGeneration()) {
+    return
+  }
+  await nextTick()
+  await resumeLastGeneration()
 }
 
 // 发送消息
@@ -477,112 +688,64 @@ const sendMessage = async () => {
 
   // 开始生成
   isGenerating.value = true
+  markRecentGeneration('generating')
   await generateCode(message, aiMessageIndex)
 }
 
-// 生成代码 - 使用 EventSource 处理流式响应
+// 生成代码 - 提交后台任务并轮询状态，页面离开后任务仍会在后端继续执行
 const generateCode = async (userMessage: string, aiMessageIndex: number) => {
-  let eventSource: EventSource | null = null
-  let streamCompleted = false
+  generationStepIndex.value = 0
+  startGenerationTimer()
 
   try {
-    // 获取 axios 配置的 baseURL
-    const baseURL = request.defaults.baseURL || API_BASE_URL
-
-    // 构建URL参数
-    const params = new URLSearchParams({
-      appId: appId.value || '',
+    messages.value[aiMessageIndex].content = '后台生成任务已启动，离开页面也会继续执行。'
+    const startRes = await startGenerationTask({
+      appId: appId.value,
       message: userMessage,
     })
 
-    const url = `${baseURL}/app/chat/gen/code?${params}`
-
-    // 创建 EventSource 连接
-    eventSource = new EventSource(url, {
-      withCredentials: true,
-    })
-
-    let fullContent = ''
-
-    // 处理接收到的消息
-    eventSource.onmessage = function (event) {
-      if (streamCompleted) return
-
-      try {
-        // 解析JSON包装的数据
-        const parsed = JSON.parse(event.data)
-        const content = parsed.d
-
-        // 拼接内容
-        if (content !== undefined && content !== null) {
-          fullContent += content
-          messages.value[aiMessageIndex].content = fullContent
-          messages.value[aiMessageIndex].loading = false
-          scrollToBottom()
-        }
-      } catch (error) {
-        console.error('解析消息失败:', error)
-        handleError(error, aiMessageIndex)
-      }
+    if (startRes.data.code !== 0 || !startRes.data.data?.id) {
+      throw new Error(startRes.data.message || '创建后台生成任务失败')
     }
 
-    // 处理done事件
-    eventSource.addEventListener('done', function () {
-      if (streamCompleted) return
+    const taskId = startRes.data.data.id
+    generationStepIndex.value = 1
 
-      streamCompleted = true
-      isGenerating.value = false
-      eventSource?.close()
-
-      // 延迟更新预览，确保后端已完成处理
-      setTimeout(async () => {
+    while (isGenerating.value) {
+      await new Promise((resolve) => window.setTimeout(resolve, 2000))
+      const taskRes = await getGenerationTask({ taskId })
+      const task = taskRes.data.data
+      if (task?.status === 'pending') {
+        messages.value[aiMessageIndex].content = '任务正在排队，系统会按可用生成名额自动开始。'
+      } else if (task?.status === 'running') {
+        generationStepIndex.value = Math.max(generationStepIndex.value, 1)
+        messages.value[aiMessageIndex].content = '后台正在生成网站，离开页面后也会继续执行。'
+      } else if (task?.status === 'succeeded') {
+        generationStepIndex.value = 3
+        isGenerating.value = false
+        messages.value[aiMessageIndex].loading = false
+        messages.value[aiMessageIndex].content = '生成完成，正在刷新右侧预览。'
+        stopGenerationTimer()
+        await loadChatHistory()
         await fetchAppInfo()
         updatePreview()
-      }, 1000)
-    })
-
-    // 处理business-error事件（后端限流等错误）
-    eventSource.addEventListener('business-error', function (event: MessageEvent) {
-      if (streamCompleted) return
-
-      try {
-        const errorData = JSON.parse(event.data)
-        console.error('SSE业务错误事件:', errorData)
-
-        // 显示具体的错误信息
-        const errorMessage = errorData.message || '生成过程中出现错误'
+        markRecentGeneration('preview-ready')
+        return
+      } else if (task?.status === 'failed') {
+        const errorMessage = task.errorMessage || '生成失败，请点击重试'
         messages.value[aiMessageIndex].content = `❌ ${errorMessage}`
         messages.value[aiMessageIndex].loading = false
         message.error(errorMessage)
-
-        streamCompleted = true
         isGenerating.value = false
-        eventSource?.close()
-      } catch (parseError) {
-        console.error('解析错误事件失败:', parseError, '原始数据:', event.data)
-        handleError(new Error('服务器返回错误'), aiMessageIndex)
-      }
-    })
-
-    // 处理错误
-    eventSource.onerror = function () {
-      if (streamCompleted || !isGenerating.value) return
-      // 检查是否是正常的连接关闭
-      if (eventSource?.readyState === EventSource.CONNECTING) {
-        streamCompleted = true
-        isGenerating.value = false
-        eventSource?.close()
-
-        setTimeout(async () => {
-          await fetchAppInfo()
-          updatePreview()
-        }, 1000)
-      } else {
-        handleError(new Error('SSE连接错误'), aiMessageIndex)
+        markRecentGeneration('failed')
+        previewUrl.value = ''
+        previewReady.value = false
+        stopGenerationTimer()
+        return
       }
     }
   } catch (error) {
-    console.error('创建 EventSource 失败：', error)
+    console.error('后台生成任务失败：', error)
     handleError(error, aiMessageIndex)
   }
 }
@@ -590,10 +753,19 @@ const generateCode = async (userMessage: string, aiMessageIndex: number) => {
 // 错误处理函数
 const handleError = (error: unknown, aiMessageIndex: number) => {
   console.error('生成代码失败：', error)
-  messages.value[aiMessageIndex].content = '抱歉，生成过程中出现了错误，请重试。'
+  const apiErrorMessage = (error as { response?: { data?: { message?: string } } })?.response?.data
+    ?.message
+  const localErrorMessage = error instanceof Error ? error.message : ''
+  const errorMessage =
+    apiErrorMessage || localErrorMessage || '生成过程中出现异常，请点击重试。'
+  messages.value[aiMessageIndex].content = `❌ 生成失败：${errorMessage}`
   messages.value[aiMessageIndex].loading = false
-  message.error('生成失败，请重试')
+  message.error(errorMessage)
   isGenerating.value = false
+  markRecentGeneration('failed')
+  previewUrl.value = ''
+  previewReady.value = false
+  stopGenerationTimer()
 }
 
 // 更新预览
@@ -603,6 +775,7 @@ const updatePreview = () => {
     const newPreviewUrl = getStaticPreviewUrl(codeGenType, appId.value)
     previewUrl.value = newPreviewUrl
     previewReady.value = true
+    markRecentGeneration('preview-ready')
   }
 }
 
@@ -665,7 +838,7 @@ const deployApp = async () => {
     })
 
     if (res.data.code === 0 && res.data.data) {
-      deployUrl.value = res.data.data
+      deployUrl.value = normalizeDeployUrl(res.data.data)
       deployModalVisible.value = true
       message.success('部署成功')
     } else {
@@ -683,13 +856,6 @@ const deployApp = async () => {
 const openInNewTab = () => {
   if (previewUrl.value) {
     window.open(previewUrl.value, '_blank')
-  }
-}
-
-// 打开部署的网站
-const openDeployedSite = () => {
-  if (deployUrl.value) {
-    window.open(deployUrl.value, '_blank')
   }
 }
 
@@ -770,7 +936,7 @@ onMounted(() => {
 
 // 清理资源
 onUnmounted(() => {
-  // EventSource 会在组件卸载时自动清理
+  stopGenerationTimer()
 })
 </script>
 
@@ -958,11 +1124,26 @@ onUnmounted(() => {
   justify-content: center;
   height: 100%;
   color: #666;
+  padding: 32px;
+  text-align: center;
 }
 
 .placeholder-icon {
   font-size: 48px;
   margin-bottom: 16px;
+}
+
+.preview-placeholder h4 {
+  margin: 0 0 8px;
+  color: #173a28;
+  font-size: 22px;
+}
+
+.preview-placeholder p {
+  max-width: 360px;
+  margin: 0 0 18px;
+  color: #66786c;
+  line-height: 1.7;
 }
 
 .preview-loading {
@@ -971,11 +1152,94 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   height: 100%;
-  color: #666;
+  padding: 32px;
+  color: #66786c;
+  background:
+    radial-gradient(circle at 50% 28%, rgba(47, 125, 75, 0.08), transparent 36%),
+    linear-gradient(180deg, #fbfdfb 0%, #f3f8f4 100%);
 }
 
-.preview-loading p {
-  margin-top: 16px;
+.generation-panel {
+  width: min(520px, 100%);
+  padding: 34px;
+  border: 1px solid rgba(47, 125, 75, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 18px 46px rgba(23, 58, 40, 0.12);
+  text-align: center;
+}
+
+.generation-panel h4 {
+  margin: 18px 0 8px;
+  color: #173a28;
+  font-size: 22px;
+}
+
+.generation-panel p {
+  margin: 0;
+  color: #66786c;
+  line-height: 1.7;
+}
+
+.generation-progress {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin: 26px 0 18px;
+}
+
+.generation-step {
+  min-width: 0;
+  padding: 12px 8px;
+  border: 1px solid rgba(47, 125, 75, 0.1);
+  border-radius: 8px;
+  background: #f6faf7;
+  color: #789083;
+}
+
+.generation-step span {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  margin-bottom: 8px;
+  border-radius: 999px;
+  background: #e6f0e9;
+  color: #50745d;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.generation-step strong {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.generation-step--active {
+  border-color: rgba(47, 125, 75, 0.34);
+  background: #eef8f1;
+  color: #2f7d4b;
+  box-shadow: 0 8px 20px rgba(47, 125, 75, 0.1);
+}
+
+.generation-step--active span,
+.generation-step--done span {
+  background: #2f7d4b;
+  color: #fff;
+}
+
+.generation-step--done {
+  color: #31533e;
+}
+
+.generation-note {
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(47, 125, 75, 0.08);
+  color: #4d6758;
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 .preview-iframe {
@@ -1017,6 +1281,14 @@ onUnmounted(() => {
 
   .message-content {
     max-width: 85%;
+  }
+
+  .generation-panel {
+    padding: 24px 18px;
+  }
+
+  .generation-progress {
+    grid-template-columns: 1fr 1fr;
   }
 
   /* 选中元素信息样式 */

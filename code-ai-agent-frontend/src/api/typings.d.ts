@@ -49,6 +49,19 @@ declare namespace API {
     user?: UserVO
   }
 
+  type GenerationTask = {
+    id?: number
+    appId?: number
+    userId?: number
+    message?: string
+    status?: 'pending' | 'running' | 'succeeded' | 'failed'
+    errorMessage?: string
+    startTime?: string
+    finishTime?: string
+    createTime?: string
+    updateTime?: string
+  }
+
   type BaseResponseAppVO = {
     code?: number
     data?: AppVO
@@ -58,6 +71,12 @@ declare namespace API {
   type BaseResponseBoolean = {
     code?: number
     data?: boolean
+    message?: string
+  }
+
+  type BaseResponseGenerationTask = {
+    code?: number
+    data?: GenerationTask
     message?: string
   }
 
@@ -171,6 +190,7 @@ declare namespace API {
   type LoginUserVO = {
     id?: number
     userAccount?: string
+    userEmail?: string
     userName?: string
     userAvatar?: string
     userProfile?: string
@@ -215,6 +235,7 @@ declare namespace API {
   type User = {
     id?: number
     userAccount?: string
+    userEmail?: string
     userPassword?: string
     userName?: string
     userAvatar?: string
@@ -229,14 +250,39 @@ declare namespace API {
   type UserAddRequest = {
     userName?: string
     userAccount?: string
+    userEmail?: string
     userAvatar?: string
     userProfile?: string
     userRole?: string
   }
 
+  type UserEmailCodeRequest = {
+    userEmail?: string
+    verifyScene?: string
+    codePurpose?: 'login' | 'resetPassword'
+  }
+
+  type UserEmailLoginRequest = {
+    userEmail?: string
+    emailCode?: string
+  }
+
   type UserLoginRequest = {
     userAccount?: string
     userPassword?: string
+  }
+
+  type UserPasswordResetRequest = {
+    userEmail?: string
+    emailCode?: string
+    newPassword?: string
+    checkPassword?: string
+  }
+
+  type UserPasswordUpdateRequest = {
+    oldPassword?: string
+    newPassword?: string
+    checkPassword?: string
   }
 
   type UserQueryRequest = {
@@ -247,12 +293,15 @@ declare namespace API {
     id?: number
     userName?: string
     userAccount?: string
+    userEmail?: string
     userProfile?: string
     userRole?: string
   }
 
   type UserRegisterRequest = {
     userAccount?: string
+    userEmail?: string
+    userName?: string
     userPassword?: string
     checkPassword?: string
   }
@@ -261,6 +310,7 @@ declare namespace API {
     id?: number
     userName?: string
     userAvatar?: string
+    userEmail?: string
     userProfile?: string
     userRole?: string
   }
@@ -268,6 +318,7 @@ declare namespace API {
   type UserVO = {
     id?: number
     userAccount?: string
+    userEmail?: string
     userName?: string
     userAvatar?: string
     userProfile?: string

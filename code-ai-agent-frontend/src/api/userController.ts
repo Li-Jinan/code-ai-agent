@@ -91,6 +91,66 @@ export async function userLogin(body: API.UserLoginRequest, options?: { [key: st
   })
 }
 
+/** 邮箱验证码登录 POST /user/login/email */
+export async function userEmailCodeLogin(
+  body: API.UserEmailLoginRequest,
+  options?: { [key: string]: any },
+) {
+  return request<API.BaseResponseLoginUserVO>('/user/login/email', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    data: body,
+    ...(options || {}),
+  })
+}
+
+/** 发送邮箱登录验证码 POST /user/email/code */
+export async function sendEmailLoginCode(
+  body: API.UserEmailCodeRequest,
+  options?: { [key: string]: any },
+) {
+  return request<API.BaseResponseBoolean>('/user/email/code', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    data: body,
+    ...(options || {}),
+  })
+}
+
+/** 通过邮箱验证码重置密码 POST /user/password/reset */
+export async function resetPassword(
+  body: API.UserPasswordResetRequest,
+  options?: { [key: string]: any },
+) {
+  return request<API.BaseResponseBoolean>('/user/password/reset', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    data: body,
+    ...(options || {}),
+  })
+}
+
+/** 当前登录用户修改密码 POST /user/password/update */
+export async function updatePassword(
+  body: API.UserPasswordUpdateRequest,
+  options?: { [key: string]: any },
+) {
+  return request<API.BaseResponseBoolean>('/user/password/update', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    data: body,
+    ...(options || {}),
+  })
+}
+
 /** 此处后端没有提供注释 POST /user/logout */
 export async function userLogout(options?: { [key: string]: any }) {
   return request<API.BaseResponseBoolean>('/user/logout', {

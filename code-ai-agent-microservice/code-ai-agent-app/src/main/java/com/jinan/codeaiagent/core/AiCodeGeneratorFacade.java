@@ -126,11 +126,16 @@ public class AiCodeGeneratorFacade {
                     .onCompleteResponse((ChatResponse response) -> {
                         // 执行 Vue 项目构建（同步执行，确保预览时项目已就绪）
                         String projectPath = AppConstant.CODE_OUTPUT_ROOT_DIR + "/vue_project_" + appId;
-                        vueProjectBuilder.buildProject(projectPath);
-                        sink.complete();
+                        boolean buildSuccess = vueProjectBuilder.buildProject(projectPath);
+                        if (buildSuccess) {
+                            sink.complete();
+                        } else {
+                            sink.error(new BusinessException(ErrorCode.SYSTEM_ERROR,
+                                    "Vue 项目构建失败，请检查生成文件后重试"));
+                        }
                     })
                     .onError((Throwable error) -> {
-                        error.printStackTrace();
+                        log.error("Vue 项目生成失败，appId: {}", appId, error);
                         sink.error(error);
                     })
                     .start();
@@ -148,21 +153,21 @@ public class AiCodeGeneratorFacade {
     private Flux<String> processCodeStream(Flux<String> codeStream, CodeGenTypeEnum codeGenType, Long appId) {
         // 字符串拼接器，用于当流式返回所有的代码之后，再保存代码
         StringBuilder codeBuilder = new StringBuilder();
-        return codeStream.doOnNext(chunk -> {
-            // 实时收集代码片段
-            codeBuilder.append(chunk);
-        }).doOnComplete(() -> {
-            // 流式返回完成后，保存代码
-            try {
-                String completeCode = codeBuilder.toString();
-                // 使用执行器解析代码
-                Object parsedResult = CodeParserExecutor.executeParser(completeCode, codeGenType);
-                // 使用执行器保存代码
-                File saveDir = CodeFileSaverExecutor.executeSaver(parsedResult, codeGenType, appId);
-                log.info("保存成功，目录为：{}", saveDir.getAbsolutePath());
-            } catch (Exception e) {
-                log.error("保存失败: {}", e.getMessage());
-            }
-        });
+        return codeStream
+                .doOnNext(codeBuilder::append)
+                .concatWith(Flux.defer(() -> {
+                    try {
+                        // 只有上游完整结束后才解析和保存；解析/写盘异常必须传给任务状态机。
+                        String completeCode = codeBuilder.toString();
+                        Object parsedResult = CodeParserExecutor.executeParser(completeCode, codeGenType);
+                        File saveDir = CodeFileSaverExecutor.executeSaver(parsedResult, codeGenType, appId);
+                        log.info("保存成功，目录为：{}", saveDir.getAbsolutePath());
+                        return Flux.<String>empty();
+                    } catch (Exception exception) {
+                        log.error("生成结果解析或保存失败，appId: {}, type: {}", appId, codeGenType, exception);
+                        return Flux.<String>error(new BusinessException(ErrorCode.SYSTEM_ERROR,
+                                "AI 返回内容无法生成可预览文件，请重试"));
+                    }
+                }));
     }
 }

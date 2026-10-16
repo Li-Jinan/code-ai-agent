@@ -9,6 +9,7 @@
     <a href="#本地启动">本地运行</a>
   </p>
   <p>
+    <a href="https://github.com/Li-Jinan/code-ai-agent/actions/workflows/ci.yml"><img src="https://github.com/Li-Jinan/code-ai-agent/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
     <img src="https://img.shields.io/badge/Java-21-007396" alt="Java 21" />
     <img src="https://img.shields.io/badge/Spring_Boot-3.5-6DB33F" alt="Spring Boot 3.5" />
     <img src="https://img.shields.io/badge/Vue-3-42B883" alt="Vue 3" />
@@ -36,19 +37,19 @@
 
 | 二次开发内容 | 具体改造 | 代码状态 |
 | --- | --- | --- |
-| 生成任务异步化与可恢复 | 将长耗时生成改为后台任务，持久化 `pending / running / succeeded / failed` 状态；同一应用复用运行中任务，刷新后恢复进度，并在生成物可预览后才标记成功 | [开发分支已提交](https://github.com/Li-Jinan/code-ai-agent/commit/9a37a62) · [结果校验](https://github.com/Li-Jinan/code-ai-agent/commit/2c1dbbe) |
-| Vue 工程生成可靠性 | 将 Vue 生成改为请求级会话内存，隔离 Redis 中残留的工具调用上下文，并识别工具调用协议异常 | [开发分支已提交](https://github.com/Li-Jinan/code-ai-agent/commit/aa77392) |
-| 工具输出与上下文控制 | 目录读取跳过 `node_modules` 等大目录，限制条目数与输出长度，补充路径穿越校验和单元测试，避免工具输出撑爆上下文 | [开发分支已提交](https://github.com/Li-Jinan/code-ai-agent/commit/ea5783b) |
-| 异步监控上下文传递 | 将流式回调跨线程后的监控上下文由 `ThreadLocal` 改为随模型请求 `attributes` 传递，并增加空值兜底 | [开发分支已提交](https://github.com/Li-Jinan/code-ai-agent/commit/ea5783b) |
-| 微服务部署与登录 | 以 Docker Compose 编排 MySQL、Redis、Nacos、Selenium 和三个 Dubbo 服务，增加健康检查、Nginx 统一入口、邮箱验证码登录与 IP 限流 | 正在整理为下一次公开合入；默认 `main` 尚未包含该部分源码 |
+| 生成任务异步化与可恢复 | 将长耗时生成改为后台任务，持久化 `pending / running / succeeded / failed` 状态；同一应用复用运行中任务，刷新后恢复进度，并在生成物可预览后才标记成功 | [实现提交](https://github.com/Li-Jinan/code-ai-agent/commit/9a37a62) · [结果校验](https://github.com/Li-Jinan/code-ai-agent/commit/2c1dbbe) |
+| Vue 工程生成可靠性 | 将 Vue 生成改为请求级会话内存，隔离 Redis 中残留的工具调用上下文，并识别工具调用协议异常 | [实现提交](https://github.com/Li-Jinan/code-ai-agent/commit/aa77392) |
+| 工具输出与上下文控制 | 目录读取跳过 `node_modules` 等大目录，限制条目数与输出长度，补充路径穿越校验和单元测试，避免工具输出撑爆上下文 | [实现提交](https://github.com/Li-Jinan/code-ai-agent/commit/ea5783b) |
+| 异步监控上下文传递 | 将流式回调跨线程后的监控上下文由 `ThreadLocal` 改为随模型请求 `attributes` 传递，并增加空值兜底 | [实现提交](https://github.com/Li-Jinan/code-ai-agent/commit/ea5783b) |
+| 微服务部署与登录 | 以 Docker Compose 编排 MySQL、Redis、Nacos、Selenium 和三个 Dubbo 服务，增加健康检查、Nginx 统一入口、邮箱验证码登录与 IP 限流 | 本次合入 `main` |
 
-> 默认 `main` 展示当前公开稳定版本；上述已提交的生成链路改造位于 [`codex/user-avatar-email-profile`](https://github.com/Li-Jinan/code-ai-agent/tree/codex/user-avatar-email-profile) 开发分支。README 不将未合入 `main` 的实现描述为默认分支既有能力。
+> 上述二次开发代码、测试、数据库迁移与部署文档均已合入 `main`。提交记录与测试用例可直接作为简历内容的核验依据。
 
 ## 项目亮点
 
 | 多模式生成 | 交互式迭代 | 完整交付闭环 |
 | --- | --- | --- |
-| 支持 HTML、多文件网站与 Vue 项目，按需求选择生成类型 | 通过 SSE 展示生成过程，结合 Tool Calling 和可视化选区持续修改 | 提供在线预览、源码下载、站点部署与自动封面生成 |
+| 支持 HTML、多文件网站与 Vue 项目，按需求选择生成类型 | 通过可恢复的后台任务展示进度，结合 Tool Calling 和可视化选区持续修改 | 提供在线预览、源码下载、站点部署与自动封面生成 |
 
 ## 在线体验
 
@@ -132,7 +133,7 @@ flowchart LR
 ## 核心能力
 
 - **多类型代码生成**：根据需求生成单页 HTML、多文件网站或 Vue 项目，并自动选择合适的生成类型。
-- **流式生成反馈**：通过 SSE 实时返回模型输出和工具执行信息，前端同步展示生成过程。
+- **异步生成与可恢复**：使用后台任务持久化生成状态，前端轮询最新任务；刷新或重新进入页面后可恢复进度，仅在生成物可预览时标记成功。
 - **Agent 文件工具**：封装文件读取、写入、修改、删除、目录读取和退出工具，使 Vue 项目可以在受控目录内持续迭代。
 - **应用级上下文**：使用 Redis ChatMemory 隔离不同应用的上下文，并从 MySQL 对话历史恢复会话。
 - **可视化修改**：在预览区选择页面元素，将标签、选择器、文本和页面路径作为上下文继续生成。
@@ -152,9 +153,9 @@ flowchart LR
 
 ### 3. AI 对话生成
 
-前端通过 `GET /api/app/chat/gen/code` 发起生成请求。应用服务调用 `code-ai-agent-ai` 中的 LangChain4j 服务，以 SSE 返回生成过程；Vue 模式可通过 Tool Calling 直接操作项目文件。
+前端通过 `POST /api/app/chat/gen/task` 创建后台生成任务，再通过任务查询接口轮询状态。应用服务在有界执行器中调用 `code-ai-agent-ai` 的 LangChain4j 服务；Vue 模式可通过 Tool Calling 直接操作项目文件。
 
-生成过程中会保存用户消息与 AI 回复，并按 `appId + codeGenType` 缓存 AI 服务实例，减少重复初始化开销。
+生成过程中会保存用户消息与 AI 回复，并按 `appId + codeGenType` 缓存 AI 服务实例；同一应用的运行中任务会被复用，超时任务由心跳回收机制处理。
 
 ### 4. 预览、编辑与交付
 
@@ -170,7 +171,7 @@ flowchart LR
 | --- | --- |
 | 前端 | Vue 3、TypeScript、Vite、Ant Design Vue、Pinia、Axios |
 | 后端 | Java 21、Spring Boot、MyBatis-Flex、Spring Session、Knife4j |
-| AI 能力 | LangChain4j、Tool Calling、SSE、Redis ChatMemory、输入护栏 |
+| AI 能力 | LangChain4j、Tool Calling、后台生成任务、Redis ChatMemory、输入护栏 |
 | 微服务 | Dubbo、Nacos |
 | 数据与缓存 | MySQL、Redis、Redisson、Caffeine |
 | 文件与自动化 | 本地生成目录、腾讯云 COS、Selenium |
@@ -208,7 +209,7 @@ code-ai-agent
 构建全部微服务模块：
 
 ```bash
-./mvnw -f code-ai-agent-microservice/pom.xml clean package -DskipTests
+bash ./mvnw -f code-ai-agent-microservice/pom.xml clean package -DskipTests
 ```
 
 准备好 MySQL、Redis 与 Nacos 后，依次启动用户服务、截图服务和应用服务：
@@ -227,6 +228,16 @@ java -jar code-ai-agent-microservice/code-ai-agent-app/target/code-ai-agent-app-
 cd code-ai-agent-frontend
 npm ci
 npm run dev
+```
+
+### Docker Compose 部署
+
+完整部署步骤见 [微服务部署指南](docs/microservice-deploy.md)。首次部署可从示例环境文件开始：
+
+```bash
+cp deploy.microservice.env.example .env
+# 填写 .env 中的模型、数据库、Redis、COS 等真实配置后执行
+docker compose -f docker-compose.microservice.yml up -d --build
 ```
 
 ## 接口与开发

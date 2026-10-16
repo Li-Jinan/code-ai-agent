@@ -14,9 +14,10 @@ create table if not exists user
 (
     id           bigint auto_increment comment 'id' primary key,
     userAccount  varchar(256)                           not null comment '账号',
+    userEmail    varchar(256)                           null comment '邮箱',
     userPassword varchar(512)                           not null comment '密码',
     userName     varchar(256)                           null comment '用户昵称',
-    userAvatar   varchar(1024)                          null comment '用户头像',
+    userAvatar   varchar(1024) default '/userAvatar.svg' null comment '用户头像',
     userProfile  varchar(512)                           null comment '用户简介',
     userRole     varchar(256) default 'user'            not null comment '用户角色：user/admin',
     editTime     datetime     default CURRENT_TIMESTAMP not null comment '编辑时间',
@@ -24,8 +25,15 @@ create table if not exists user
     updateTime   datetime     default CURRENT_TIMESTAMP not null on update CURRENT_TIMESTAMP comment '更新时间',
     isDelete     tinyint      default 0                 not null comment '是否删除',
     UNIQUE KEY uk_userAccount (userAccount),
+    UNIQUE KEY uk_userEmail (userEmail),
     INDEX idx_userName (userName)
 ) comment '用户' collate = utf8mb4_unicode_ci;
+
+-- 已有线上库可单独执行：
+-- ALTER TABLE user ADD COLUMN userEmail varchar(256) null comment '邮箱' AFTER userAccount;
+-- ALTER TABLE user ADD UNIQUE KEY uk_userEmail (userEmail);
+-- ALTER TABLE user MODIFY COLUMN userAvatar varchar(1024) default '/userAvatar.svg' null comment '用户头像';
+-- UPDATE user SET userAvatar = '/userAvatar.svg' WHERE userAvatar IS NULL OR userAvatar = '';
 
 -- 应用表
 create table app
@@ -63,6 +71,28 @@ create table chat_history
     INDEX idx_createTime (createTime),             -- 提升基于时间的查询性能
     INDEX idx_appId_createTime (appId, createTime) -- 游标查询核心索引
 ) comment '对话历史' collate = utf8mb4_unicode_ci;
+
+-- 生成任务表：让代码生成脱离浏览器 SSE 连接，在后端后台继续执行
+create table if not exists generation_task
+(
+    id           bigint auto_increment comment 'id' primary key,
+    appId        bigint                             not null comment '应用id',
+    userId       bigint                             not null comment '创建用户id',
+    message      text                               not null comment '生成提示词',
+    status       varchar(32)                        not null comment 'pending/running/succeeded/failed',
+    errorMessage varchar(512)                       null comment '失败原因',
+    startTime    datetime                           null comment '开始时间',
+    finishTime   datetime                           null comment '结束时间',
+    heartbeat_time datetime                         null comment '最近任务心跳时间',
+    running_app_id bigint                           null comment '应用当前生成任务占用标记',
+    createTime   datetime default CURRENT_TIMESTAMP not null comment '创建时间',
+    updateTime   datetime default CURRENT_TIMESTAMP not null on update CURRENT_TIMESTAMP comment '更新时间',
+    isDelete     tinyint  default 0                 not null comment '是否删除',
+    UNIQUE KEY uk_generation_task_running_app (running_app_id),
+    INDEX idx_appId_createTime (appId, createTime),
+    INDEX idx_userId_status (userId, status),
+    INDEX idx_status_createTime (status, createTime)
+) comment '生成任务' collate = utf8mb4_unicode_ci;
 
 -- 1. 给 root@localhost 改成 mysql_native_password 认证方式（适配 JDBC）
 -- 请在本地执行前替换为自己的数据库密码

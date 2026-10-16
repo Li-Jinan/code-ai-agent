@@ -1,0 +1,16 @@
+server:
+  forward-headers-strategy: framework
+
+dubbo:
+  registry:
+    address: ${DUBBO_REGISTRY_ADDRESS:nacos://nacos:8848}
+  protocol:
+    host: ${DUBBO_PROTOCOL_HOST:screenshot-service}
+
+cos:
+  client:
+    host: ${COS_CLIENT_HOST}
+    secretId: ${COS_CLIENT_SECRETID}
+    secretKey: ${COS_CLIENT_SECRETKEY}
+    region: ${COS_CLIENT_REGION}
+    bucket: ${COS_CLIENT_BUCKET}

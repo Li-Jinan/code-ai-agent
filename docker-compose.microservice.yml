@@ -1,0 +1,254 @@
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: code-ai-agent-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD in .env}
+      MYSQL_DATABASE: code_ai_agent
+      TZ: Asia/Shanghai
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-time-zone=+08:00
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./docker/mysql/init:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "${INFRA_BIND_IP:-127.0.0.1}:${MYSQL_PUBLIC_PORT:-3306}:3306"
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$${MYSQL_ROOT_PASSWORD} --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  redis:
+    image: redis:7.4-alpine
+    container_name: code-ai-agent-redis
+    restart: unless-stopped
+    environment:
+      # redis-cli automatically reads this variable, including in the healthcheck.
+      REDISCLI_AUTH: ${REDIS_PASSWORD:?set REDIS_PASSWORD in .env}
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:?set REDIS_PASSWORD in .env}
+    volumes:
+      - redis-data:/data
+    ports:
+      - "${INFRA_BIND_IP:-127.0.0.1}:${REDIS_PUBLIC_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  nacos:
+    image: nacos/nacos-server:v2.4.3
+    container_name: code-ai-agent-nacos
+    restart: unless-stopped
+    environment:
+      MODE: standalone
+      NACOS_AUTH_ENABLE: "false"
+      JVM_XMS: 256m
+      JVM_XMX: 512m
+      JVM_XMN: 128m
+    ports:
+      - "${INFRA_BIND_IP:-127.0.0.1}:${NACOS_PUBLIC_PORT:-8848}:8848"
+      - "${INFRA_BIND_IP:-127.0.0.1}:${NACOS_GRPC_PUBLIC_PORT:-9848}:9848"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8848/nacos/v1/console/health/readiness | grep -q OK"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 40s
+
+  selenium:
+    image: selenium/standalone-chromium:4.33.0-20250606
+    container_name: code-ai-agent-selenium
+    restart: unless-stopped
+    shm_size: 1gb
+    environment:
+      SE_NODE_MAX_SESSIONS: 1
+      SE_NODE_SESSION_TIMEOUT: 120
+      SE_START_XVFB: "true"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:4444/status | grep -q '\"ready\": true'"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 20s
+
+  user-service:
+    build:
+      context: ./code-ai-agent-microservice
+      dockerfile: Dockerfile
+      target: service-runtime
+      args:
+        MODULE: code-ai-agent-user
+    container_name: code-ai-agent-user
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nacos:
+        condition: service_healthy
+    environment:
+      JAVA_TOOL_OPTIONS: -Xms128m -Xmx512m
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:mysql://${MYSQL_HOST:-mysql}:${MYSQL_PORT:-3306}/${MYSQL_DATABASE:-code_ai_agent}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
+      SPRING_DATASOURCE_USERNAME: ${MYSQL_USERNAME:-root}
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD in .env}
+      SPRING_DATA_REDIS_HOST: ${REDIS_HOST:-redis}
+      SPRING_DATA_REDIS_PORT: ${REDIS_PORT:-6379}
+      SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD:?set REDIS_PASSWORD in .env}
+      MAIL_HOST: ${MAIL_HOST:-smtp.qq.com}
+      MAIL_PORT: ${MAIL_PORT:-465}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      DUBBO_REGISTRY_ADDRESS: nacos://nacos:8848
+      DUBBO_PROTOCOL_HOST: user-service
+      DEMO_ACCOUNT_ENABLED: ${DEMO_ACCOUNT_ENABLED:-true}
+      DEMO_ACCOUNT_USERNAME: ${DEMO_ACCOUNT_USERNAME:-demo}
+      DEMO_ACCOUNT_PASSWORD: ${DEMO_ACCOUNT_PASSWORD:-demo123456}
+      APP_CORS_ALLOWED_ORIGINS: ${PUBLIC_BASE_URL:?set PUBLIC_BASE_URL in .env}
+    ports:
+      - "${SERVICE_BIND_IP:-127.0.0.1}:${USER_SERVICE_PUBLIC_PORT:-8124}:8124"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8124/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  screenshot-service:
+    build:
+      context: ./code-ai-agent-microservice
+      dockerfile: Dockerfile
+      target: service-runtime
+      args:
+        MODULE: code-ai-agent-screenshot
+    container_name: code-ai-agent-screenshot
+    restart: unless-stopped
+    depends_on:
+      nacos:
+        condition: service_healthy
+      selenium:
+        condition: service_healthy
+    environment:
+      JAVA_TOOL_OPTIONS: -Xms128m -Xmx512m
+      SPRING_PROFILES_ACTIVE: docker
+      DUBBO_REGISTRY_ADDRESS: nacos://nacos:8848
+      DUBBO_PROTOCOL_HOST: screenshot-service
+      SELENIUM_REMOTE_URL: http://selenium:4444/wd/hub
+      COS_CLIENT_HOST: ${COS_CLIENT_HOST:?set COS_CLIENT_HOST in .env}
+      COS_CLIENT_SECRETID: ${COS_CLIENT_SECRETID:?set COS_CLIENT_SECRETID in .env}
+      COS_CLIENT_SECRETKEY: ${COS_CLIENT_SECRETKEY:?set COS_CLIENT_SECRETKEY in .env}
+      COS_CLIENT_REGION: ${COS_CLIENT_REGION:?set COS_CLIENT_REGION in .env}
+      COS_CLIENT_BUCKET: ${COS_CLIENT_BUCKET:?set COS_CLIENT_BUCKET in .env}
+      APP_CORS_ALLOWED_ORIGINS: ${PUBLIC_BASE_URL:?set PUBLIC_BASE_URL in .env}
+    ports:
+      - "${SERVICE_BIND_IP:-127.0.0.1}:${SCREENSHOT_SERVICE_PUBLIC_PORT:-8127}:8127"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8127/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  app-service:
+    build:
+      context: ./code-ai-agent-microservice
+      dockerfile: Dockerfile
+      target: app-runtime
+      args:
+        MODULE: code-ai-agent-app
+    container_name: code-ai-agent-app
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nacos:
+        condition: service_healthy
+      user-service:
+        condition: service_healthy
+      screenshot-service:
+        condition: service_healthy
+    environment:
+      JAVA_TOOL_OPTIONS: -Xms256m -Xmx1024m
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:mysql://${MYSQL_HOST:-mysql}:${MYSQL_PORT:-3306}/${MYSQL_DATABASE:-code_ai_agent}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
+      SPRING_DATASOURCE_USERNAME: ${MYSQL_USERNAME:-root}
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD in .env}
+      SPRING_DATA_REDIS_HOST: ${REDIS_HOST:-redis}
+      SPRING_DATA_REDIS_PORT: ${REDIS_PORT:-6379}
+      SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD:?set REDIS_PASSWORD in .env}
+      DUBBO_REGISTRY_ADDRESS: nacos://nacos:8848
+      DUBBO_PROTOCOL_HOST: app-service
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:?set PUBLIC_BASE_URL in .env}
+      DEPLOY_BASE_URL: ${DEPLOY_BASE_URL:?set DEPLOY_BASE_URL in .env}
+      INTERNAL_DEPLOY_BASE_URL: http://frontend:8080
+      APP_CORS_ALLOWED_ORIGINS: ${PUBLIC_BASE_URL:?set PUBLIC_BASE_URL in .env}
+      LANGCHAIN4J_OPEN_AI_CHAT_MODEL_API_KEY: ${DEEPSEEK_API_KEY:?set DEEPSEEK_API_KEY in .env}
+      LANGCHAIN4J_OPEN_AI_STREAMING_CHAT_MODEL_API_KEY: ${DEEPSEEK_API_KEY:?set DEEPSEEK_API_KEY in .env}
+      LANGCHAIN4J_OPEN_AI_REASONING_STREAMING_CHAT_MODEL_API_KEY: ${DEEPSEEK_API_KEY:?set DEEPSEEK_API_KEY in .env}
+      LANGCHAIN4J_OPEN_AI_ROUTING_CHAT_MODEL_API_KEY: ${DEEPSEEK_API_KEY:?set DEEPSEEK_API_KEY in .env}
+      GENERATION_TASK_WORKER_COUNT: ${GENERATION_TASK_WORKER_COUNT:-2}
+      GENERATION_TASK_QUEUE_CAPACITY: ${GENERATION_TASK_QUEUE_CAPACITY:-8}
+      GENERATION_TASK_TIMEOUT: ${GENERATION_TASK_TIMEOUT:-10m}
+      PEXELS_API_KEY: ${PEXELS_API_KEY:-}
+    volumes:
+      - app-code-output:/app/tmp/code_output
+      - app-code-deploy:/app/tmp/code_deploy
+    ports:
+      - "${SERVICE_BIND_IP:-127.0.0.1}:${APP_SERVICE_PUBLIC_PORT:-8125}:8125"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8125/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 45s
+
+  frontend:
+    build:
+      context: ./code-ai-agent-frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: /api
+        VITE_DEPLOY_DOMAIN: ${DEPLOY_BASE_URL:?set DEPLOY_BASE_URL in .env}
+        VITE_DEMO_ACCOUNT_ENABLED: ${DEMO_ACCOUNT_ENABLED:-true}
+        VITE_DEMO_ACCOUNT_USERNAME: ${DEMO_ACCOUNT_USERNAME:-demo}
+        VITE_DEMO_ACCOUNT_PASSWORD: ${DEMO_ACCOUNT_PASSWORD:-demo123456}
+    container_name: code-ai-agent-frontend
+    restart: unless-stopped
+    environment:
+      DEPLOY_BASE_URL: ${DEPLOY_BASE_URL:?set DEPLOY_BASE_URL in .env}
+      PUBLIC_API_BASE_URL: /api
+    depends_on:
+      app-service:
+        condition: service_healthy
+      user-service:
+        condition: service_healthy
+    volumes:
+      - app-code-deploy:/usr/share/nginx/deploy:ro
+    ports:
+      - "${WEB_BIND_IP:-0.0.0.0}:${HTTP_PUBLIC_PORT:-80}:80"
+      - "${WEB_BIND_IP:-0.0.0.0}:${PREVIEW_PUBLIC_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://127.0.0.1/ && wget --quiet --tries=1 --spider http://127.0.0.1:8080/preview-health"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+volumes:
+  mysql-data:
+  redis-data:
+  app-code-output:
+  app-code-deploy:
+
+networks:
+  default:
+    name: ${APP_NETWORK_NAME:-code-ai-agent-network}
+    external: ${APP_NETWORK_EXTERNAL:-false}
