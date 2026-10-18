@@ -42,7 +42,7 @@
 | 工具输出与上下文控制 | 目录读取跳过 `node_modules` 等大目录，限制条目数与输出长度，补充路径穿越校验和单元测试，避免工具输出撑爆上下文 | [实现提交](https://github.com/Li-Jinan/code-ai-agent/commit/ea5783b) |
 | 异步监控上下文传递 | 将流式回调跨线程后的监控上下文由 `ThreadLocal` 改为随模型请求 `attributes` 传递，并增加空值兜底 | [实现提交](https://github.com/Li-Jinan/code-ai-agent/commit/ea5783b) |
 | 任务心跳与时钟同源 | 心跳写入与过期判断统一使用 MySQL 时钟（`CURRENT_TIMESTAMP - INTERVAL n SECOND`），修复数据库与 JVM 时区不一致时新任务被误判超时并回收的问题；补充时区错位集成测试 | [集成测试](code-ai-agent-microservice/code-ai-agent-app/src/test/java/com/jinan/codeaiagent/service/impl/GenerationTaskMySqlIntegrationTest.java) |
-| 微服务部署与登录 | 以 Docker Compose 编排 MySQL、Redis、Nacos、Selenium 和三个 Dubbo 服务，增加健康检查、Nginx 统一入口、邮箱验证码登录与 IP 限流 | 本次合入 `main` |
+| 微服务部署与登录 | 以 Docker Compose 编排 MySQL、Redis、Nacos、Selenium 和三个 Dubbo 服务，增加健康检查、Nginx 统一入口、邮箱验证码登录与 IP 限流 | [实现提交](https://github.com/Li-Jinan/code-ai-agent/commit/1fb1071) |
 
 > 上述二次开发代码、测试、数据库迁移与部署文档均已合入 `main`。
 >
