@@ -31,7 +31,7 @@
 
 ## 项目来源与二次开发说明
 
-本项目基于开源项目 [liyupi/yu-ai-code-mother](https://github.com/liyupi/yu-ai-code-mother) 进行二次开发。上游项目提供了 AI 应用生成、Tool Calling、Redis 对话记忆与 LangGraph4j 工作流等基础能力；本仓库在此基础上聚焦生成链路可靠性、微服务化部署与账号体系工程化。
+本项目基于开源项目 [liyupi/yu-ai-code-mother](https://github.com/liyupi/yu-ai-code-mother) 进行二次开发。上游项目已提供 AI 应用生成、Tool Calling、Redis 对话记忆、LangGraph4j 工作流，以及基于 Dubbo + Nacos 的 `app / user / screenshot` 三服务拆分。本仓库没有把该拆分列为个人原创工作，而是在上游架构基础上聚焦生成链路可靠性、容器化部署与账号体系工程化。
 
 为使项目经历与代码状态可核对，二次开发内容及其公开状态如下：
 
@@ -42,7 +42,7 @@
 | 工具输出与上下文控制 | 目录读取跳过 `node_modules` 等大目录，限制条目数与输出长度，补充路径穿越校验和单元测试，避免工具输出撑爆上下文 | [实现提交](https://github.com/Li-Jinan/code-ai-agent/commit/ea5783b) |
 | 异步监控上下文传递 | 将流式回调跨线程后的监控上下文由 `ThreadLocal` 改为随模型请求 `attributes` 传递，并增加空值兜底 | [实现提交](https://github.com/Li-Jinan/code-ai-agent/commit/ea5783b) |
 | 任务心跳与时钟同源 | 心跳写入与过期判断统一使用 MySQL 时钟（`CURRENT_TIMESTAMP - INTERVAL n SECOND`），修复数据库与 JVM 时区不一致时新任务被误判超时并回收的问题；补充时区错位集成测试 | [集成测试](code-ai-agent-microservice/code-ai-agent-app/src/test/java/com/jinan/codeaiagent/service/impl/GenerationTaskMySqlIntegrationTest.java) |
-| 微服务部署与登录 | 以 Docker Compose 编排 MySQL、Redis、Nacos、Selenium 和三个 Dubbo 服务，增加健康检查、Nginx 统一入口、邮箱验证码登录与 IP 限流 | [实现提交](https://github.com/Li-Jinan/code-ai-agent/commit/1fb1071) |
+| 微服务运行与登录工程化 | 在上游已有三服务拆分基础上，以 Docker Compose 编排 MySQL、Redis、Nacos、Selenium 和三个 Dubbo 服务，增加健康检查、Nginx 统一入口、邮箱验证码登录与 IP 限流 | [实现提交](https://github.com/Li-Jinan/code-ai-agent/commit/1fb1071) |
 
 > 上述二次开发代码、测试、数据库迁移与部署文档均已合入 `main`。
 >
@@ -101,7 +101,7 @@
 
 ## 系统架构
 
-当前主实现位于 `code-ai-agent-microservice`。其中 `app`、`user`、`screenshot` 是可独立运行的 Spring Boot 服务，`ai`、`client`、`model`、`common` 是供服务复用的 Maven 模块。
+当前主实现位于 `code-ai-agent-microservice`。`app`、`user`、`screenshot` 三服务以及 Dubbo + Nacos 的拆分方式来自上游项目；本仓库在该基线上完成部署编排、统一入口、账号能力和生成任务可靠性改造。`ai`、`client`、`model`、`common` 是供服务复用的 Maven 模块。
 
 ```mermaid
 flowchart LR
