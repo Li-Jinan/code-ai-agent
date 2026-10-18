@@ -30,6 +30,17 @@ server:
     session:
       cookie:
         max-age: 2592000
+management:
+  # Keep metrics on a container-internal port instead of the public API port.
+  server:
+    port: 9125
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      show-details: never
 # AI
 langchain4j:
   open-ai:

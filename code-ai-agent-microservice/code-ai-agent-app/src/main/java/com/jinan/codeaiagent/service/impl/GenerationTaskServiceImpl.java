@@ -8,6 +8,7 @@ import com.jinan.codeaiagent.exception.BusinessException;
 import com.jinan.codeaiagent.exception.ErrorCode;
 import com.jinan.codeaiagent.exception.ThrowUtils;
 import com.jinan.codeaiagent.mapper.GenerationTaskMapper;
+import com.jinan.codeaiagent.metrics.GenerationTaskMetrics;
 import com.jinan.codeaiagent.model.entity.App;
 import com.jinan.codeaiagent.model.entity.GenerationTask;
 import com.jinan.codeaiagent.model.entity.User;
@@ -27,6 +28,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.io.File;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
@@ -51,6 +53,9 @@ public class GenerationTaskServiceImpl extends ServiceImpl<GenerationTaskMapper,
 
     @Resource
     private GenerationTaskExecutorProperties executorProperties;
+
+    @Resource
+    private GenerationTaskMetrics generationTaskMetrics;
 
     /** 只为当前进程实际接收的任务续租，其他实例的任务由其所属实例续租。 */
     private final Set<Long> locallyOwnedTaskIds = ConcurrentHashMap.newKeySet();
@@ -147,28 +152,55 @@ public class GenerationTaskServiceImpl extends ServiceImpl<GenerationTaskMapper,
             log.warn("生成任务已被其他流程回收或状态已变化，跳过执行，taskId: {}", taskId);
             return;
         }
+        long startedNanos = System.nanoTime();
+        String codeGenType = "unknown";
         try {
+            App app = appService.getById(appId);
+            if (app != null && StrUtil.isNotBlank(app.getCodeGenType())) {
+                codeGenType = app.getCodeGenType();
+            }
             List<String> chunks = appService.chatToGenCode(appId, message, loginUser)
                     .collectList()
                     .block(executorProperties.getTimeout());
             if (containsGenerationFailure(chunks)) {
                 throw new BusinessException(ErrorCode.SYSTEM_ERROR, "AI 返回格式异常，请点击重试。");
             }
-            App app = appService.getById(appId);
+            app = appService.getById(appId);
             if (!hasGeneratedArtifact(app)) {
                 throw new BusinessException(ErrorCode.SYSTEM_ERROR, "生成未产出可预览文件，请点击重试。");
             }
-            generationTaskMapper.transitionStatus(taskId,
+            int completed = generationTaskMapper.transitionStatus(taskId,
                     GenerationTaskStatusEnum.RUNNING.getValue(),
                     GenerationTaskStatusEnum.SUCCEEDED.getValue(), null, null, LocalDateTime.now());
+            if (completed > 0) {
+                recordTaskMetric(codeGenType, GenerationTaskStatusEnum.SUCCEEDED.getValue(), startedNanos);
+            }
         } catch (Exception exception) {
             log.error("后台生成任务失败，taskId: {}, appId: {}", taskId, appId, exception);
-            generationTaskMapper.transitionStatus(taskId,
+            int failed = generationTaskMapper.transitionStatus(taskId,
                     GenerationTaskStatusEnum.RUNNING.getValue(),
                     GenerationTaskStatusEnum.FAILED.getValue(),
                     getFriendlyErrorMessage(exception), null, LocalDateTime.now());
+            if (failed > 0) {
+                recordTaskMetric(codeGenType, GenerationTaskStatusEnum.FAILED.getValue(), startedNanos);
+            }
         } finally {
             locallyOwnedTaskIds.remove(taskId);
+        }
+    }
+
+    private void recordTaskMetric(String codeGenType, String status, long startedNanos) {
+        if (generationTaskMetrics == null) {
+            return;
+        }
+        try {
+            generationTaskMetrics.record(
+                    codeGenType,
+                    status,
+                    Duration.ofNanos(Math.max(0, System.nanoTime() - startedNanos))
+            );
+        } catch (RuntimeException metricsError) {
+            log.warn("记录生成任务指标失败，codeGenType: {}, status: {}", codeGenType, status, metricsError);
         }
     }
 
