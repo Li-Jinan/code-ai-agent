@@ -1,0 +1,4 @@
+mode,runs,succeeded,avg_server_run_ms,p95_server_run_ms,preview_success_rate
+html,20,17,18200,22000,85.00%
+multi_file,20,20,9350,20000,100.00%
+vue_project,20,19,66900,73000,95.00%
