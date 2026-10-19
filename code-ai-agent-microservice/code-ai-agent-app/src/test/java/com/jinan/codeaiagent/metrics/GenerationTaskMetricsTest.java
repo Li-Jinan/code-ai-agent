@@ -15,7 +15,7 @@ class GenerationTaskMetricsTest {
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
         GenerationTaskMetrics metrics = new GenerationTaskMetrics(registry);
 
-        metrics.record("vue_project", "succeeded", Duration.ofSeconds(12));
+        metrics.record("vue_project", "succeeded", Duration.ofSeconds(140));
 
         var timer = registry.find("generation.task.duration")
                 .tags("code_gen_type", "vue_project", "status", "succeeded")
@@ -26,7 +26,8 @@ class GenerationTaskMetricsTest {
         assertNotNull(timer);
         assertNotNull(counter);
         assertEquals(1, timer.count());
-        assertEquals(12.0, timer.totalTime(java.util.concurrent.TimeUnit.SECONDS), 0.001);
+        assertEquals(140.0, timer.totalTime(java.util.concurrent.TimeUnit.SECONDS), 0.001);
+        assertEquals(140.0, timer.max(java.util.concurrent.TimeUnit.SECONDS), 0.001);
         assertEquals(1.0, counter.count(), 0.001);
     }
 }

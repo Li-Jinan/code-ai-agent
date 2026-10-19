@@ -22,6 +22,7 @@ public class GenerationTaskMetrics {
         Timer.builder("generation.task.duration")
                 .description("Generation task execution duration after leaving the queue")
                 .tags("code_gen_type", safeType, "status", status)
+                .maximumExpectedValue(Duration.ofMinutes(10))
                 .publishPercentileHistogram()
                 .register(meterRegistry)
                 .record(duration);
