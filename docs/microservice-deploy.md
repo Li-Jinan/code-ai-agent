@@ -45,6 +45,7 @@ vim .env
 - `GENERATION_TASK_WORKER_COUNT`、`GENERATION_TASK_QUEUE_CAPACITY`：生成执行槽位和等待队列上限；
   默认分别为 `2` 和 `8`，小规格服务器不要盲目调高
 - `GENERATION_TASK_TIMEOUT`：单个后台生成任务超时，默认 `10m`
+- `DEMO_ACCOUNT_DAILY_GENERATION_LIMIT`：公共演示账号每日共享生成额度，默认 `10`
 - `COS_CLIENT_HOST`、`COS_CLIENT_SECRETID`、`COS_CLIENT_SECRETKEY`、`COS_CLIENT_REGION`、`COS_CLIENT_BUCKET`
 - 邮箱登录需要再配置 `MAIL_USERNAME`、`MAIL_PASSWORD`
 
@@ -131,7 +132,7 @@ curl -fsS http://127.0.0.1:18081/preview-health
 浏览器验证顺序：
 
 1. 打开 `PUBLIC_BASE_URL`。
-2. 使用 `demo / demo123456` 登录；登录页提供“一键填入”。
+2. 使用 `demo / demo123456` 登录；登录页提供“一键填入”。演示账号共享每日 10 次生成额度，生成入口另有每用户每分钟 5 次限流；生产环境可通过 `DEMO_ACCOUNT_DAILY_GENERATION_LIMIT` 调整每日额度。
 3. 创建应用并观察 SSE 流式生成。
 4. 点击部署，确认返回 `${DEPLOY_BASE_URL}/{deployKey}/`。
 5. 确认部署页可访问，并在稍后刷新作品列表检查 COS 封面。

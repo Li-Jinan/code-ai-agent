@@ -85,6 +85,10 @@ generation:
     worker-count: 2
     queue-capacity: 8
     timeout: 10m
+demo:
+  account:
+    username: ${DEMO_ACCOUNT_USERNAME:demo}
+    daily-generation-limit: ${DEMO_ACCOUNT_DAILY_GENERATION_LIMIT:10}
 # springdoc-openapi
 springdoc:
   group-configs:
