@@ -8,51 +8,78 @@
   "panels": [
     {
       "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "fieldConfig": {"defaults": {"unit": "s"}, "overrides": []},
+      "fieldConfig": {"defaults": {"decimals": 1, "unit": "s"}, "overrides": []},
       "gridPos": {"h": 9, "w": 12, "x": 0, "y": 0},
       "id": 1,
-      "options": {"legend": {"displayMode": "table", "placement": "bottom", "showLegend": true}},
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "horizontal",
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "textMode": "auto",
+        "wideLayout": true
+      },
       "targets": [
         {
-          "expr": "sum by (code_gen_type) (rate(generation_task_duration_seconds_sum[$__rate_interval])) / sum by (code_gen_type) (rate(generation_task_duration_seconds_count[$__rate_interval]))",
+          "expr": "sum by (code_gen_type) (generation_task_duration_seconds_sum) / sum by (code_gen_type) (generation_task_duration_seconds_count)",
+          "instant": true,
           "legendFormat": "{{code_gen_type}}",
           "refId": "A"
         }
       ],
-      "title": "Average generation duration",
-      "type": "timeseries"
+      "title": "Average generation duration since startup",
+      "type": "stat"
     },
     {
       "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "fieldConfig": {"defaults": {"unit": "s"}, "overrides": []},
+      "fieldConfig": {"defaults": {"decimals": 1, "unit": "s"}, "overrides": []},
       "gridPos": {"h": 9, "w": 12, "x": 12, "y": 0},
       "id": 2,
-      "options": {"legend": {"displayMode": "table", "placement": "bottom", "showLegend": true}},
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "horizontal",
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "textMode": "auto",
+        "wideLayout": true
+      },
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, sum by (le, code_gen_type) (rate(generation_task_duration_seconds_bucket[$__rate_interval])))",
+          "expr": "histogram_quantile(0.95, sum by (le, code_gen_type) (generation_task_duration_seconds_bucket))",
+          "instant": true,
           "legendFormat": "{{code_gen_type}}",
           "refId": "A"
         }
       ],
-      "title": "P95 generation duration",
-      "type": "timeseries"
+      "title": "P95 generation duration since startup",
+      "type": "stat"
     },
     {
       "datasource": {"type": "prometheus", "uid": "prometheus"},
       "fieldConfig": {"defaults": {"decimals": 0}, "overrides": []},
       "gridPos": {"h": 8, "w": 12, "x": 0, "y": 9},
       "id": 3,
-      "options": {"legend": {"displayMode": "table", "placement": "bottom", "showLegend": true}},
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "horizontal",
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "textMode": "auto",
+        "wideLayout": true
+      },
       "targets": [
         {
-          "expr": "sum by (code_gen_type, status) (increase(generation_task_completed_total[$__range]))",
+          "expr": "sum by (code_gen_type, status) (generation_task_completed_total)",
+          "instant": true,
           "legendFormat": "{{code_gen_type}} / {{status}}",
           "refId": "A"
         }
       ],
-      "title": "Terminal samples in selected range",
-      "type": "timeseries"
+      "title": "Terminal samples since startup",
+      "type": "stat"
     }
   ],
   "refresh": "10s",

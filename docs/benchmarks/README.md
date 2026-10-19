@@ -9,6 +9,7 @@
 - [生成任务原始数据](raw/generation-20261018.csv)：67 次尝试，包含 60 个服务器终态样本和 7 个客户端网络错误。
 - [断线恢复原始数据](raw/reconnect-20261018.csv)：Vue 固定场景 5 次，均由新客户端找回同一 task ID。
 - [目录限流原始数据](raw/directory-output-20261018-204925.csv)：固定 1,700 文件夹具的改造前后算法重放。
+- [监控链路冒烟数据](raw/metrics-smoke-20261019.csv)：两轮各覆盖三种模式，共 6 次任务，全部成功且预览返回 HTTP 200；首轮暴露默认直方图上限问题，修复并重启后以第二轮验证。该数据仅验证监控链路，不并入正式性能统计。
 - [生成任务汇总](results.md) 与 [机器可读汇总](summary.csv)：由汇总脚本直接生成。
 
 ## 指标定义
@@ -71,7 +72,9 @@ python3 scripts/benchmark/measure_directory_output.py
 
 ## Grafana 证据要求
 
-微服务版需要先部署 Actuator、Micrometer Prometheus 指标，并让 Prometheus 抓取 app-service。截图必须同时显示：查询语句、统计时间范围、三种 `code_gen_type` 标签和有效样本量。没有这些信息的截图不能作为效果数据证据。
+微服务版需要先部署 Actuator、Micrometer Prometheus 指标，并让 Prometheus 抓取 app-service。截图显示统计时间范围、三种 `code_gen_type` 标签和有效样本量；查询语句保存在版本化的 [`grafana/generation-task-dashboard.json`](../../grafana/generation-task-dashboard.json) 中。截图与面板定义必须一起核对，不能只凭一张图宣称性能结论。
+
+线上证据见 [`docs/screenshots/grafana-generation-metrics.png`](../screenshots/grafana-generation-metrics.png)。该图来自直方图修复并重启后的第二轮冒烟，每种模式 1 次，面板为该进程启动以来的累计值；正式效果数字仍以每种模式 20 个终态样本的 CSV 汇总为准。
 
 本地启动监控栈（密码只放在未提交的 `.env` 中）：
 
