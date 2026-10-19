@@ -20,8 +20,8 @@ jobs:
           distribution: temurin
           java-version: '21'
           cache: maven
-      - name: Build microservices
-        run: bash ./mvnw -B -ntp -f code-ai-agent-microservice/pom.xml -DskipTests package
+      - name: Test and build microservices
+        run: bash ./mvnw -B -ntp -f code-ai-agent-microservice/pom.xml package
 
   frontend:
     name: Frontend build
