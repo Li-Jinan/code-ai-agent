@@ -119,7 +119,13 @@
 
 客户端恢复指刷新、关闭页面或会话断开后重新查询任务，不代表 app-service 进程重启后从断点续跑。服务重启时，当前实现会将心跳过期任务标记为失败，允许用户重试。
 
-测试方法、固定提示词、采集脚本和完整数据见 [效果数据采集说明](docs/benchmarks/README.md)、[生成原始 CSV](docs/benchmarks/raw/generation-20261018.csv)、[断线恢复原始 CSV](docs/benchmarks/raw/reconnect-20261018.csv) 与 [自动汇总结果](docs/benchmarks/results.md)。
+### 线上监控链路
+
+![Grafana 生成任务监控](docs/screenshots/grafana-generation-metrics.png)
+
+2026-10-19 部署 Actuator、Micrometer、Prometheus 与 Grafana 后共执行两轮线上冒烟，每轮每种模式 1 次，6 次任务均成功且最终预览返回 HTTP 200。首轮发现默认直方图会截断超过 30 秒的长任务，修复并重启服务后执行第二轮；上图显示第二轮的 3 个进程内样本，用于证明监控链路、模式标签和长耗时直方图有效，不替代上方每种模式 20 个终态样本的正式统计。Prometheus、Grafana 与管理端口默认仅绑定服务器回环地址，不经公开 API 暴露。
+
+测试方法、固定提示词、采集脚本和完整数据见 [效果数据采集说明](docs/benchmarks/README.md)、[生成原始 CSV](docs/benchmarks/raw/generation-20261018.csv)、[断线恢复原始 CSV](docs/benchmarks/raw/reconnect-20261018.csv)、[监控冒烟原始 CSV](docs/benchmarks/raw/metrics-smoke-20261019.csv) 与 [自动汇总结果](docs/benchmarks/results.md)。
 
 ## 系统架构
 
