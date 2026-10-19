@@ -22,6 +22,7 @@ import com.jinan.codeaiagent.model.vo.AppVO;
 import com.jinan.codeaiagent.ratelimter.annotation.RateLimit;
 import com.jinan.codeaiagent.ratelimter.enums.RateLimitType;
 import com.jinan.codeaiagent.service.ProjectDownloadService;
+import com.jinan.codeaiagent.service.DemoAccountQuotaService;
 import com.jinan.codeaiagent.service.GenerationTaskService;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
@@ -57,6 +58,9 @@ public class AppController {
     @Resource
     private GenerationTaskService generationTaskService;
 
+    @Resource
+    private DemoAccountQuotaService demoAccountQuotaService;
+
     @GetMapping(value = "/chat/gen/code", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     @RateLimit(limitType = RateLimitType.USER, rate = 5, rateInterval = 60, message = "AI 对话请求过于频繁，请稍后再试")
     public Flux<ServerSentEvent<String>> chatToGenCode(@RequestParam Long appId,
@@ -67,6 +71,7 @@ public class AppController {
         ThrowUtils.throwIf(StrUtil.isBlank(message), ErrorCode.PARAMS_ERROR, "提示词不能为空");
         // 获取当前登录用户
         User loginUser = InnerUserService.getLoginUser(request);
+        demoAccountQuotaService.checkAndConsume(loginUser);
         // 调用服务生成代码（SSE 流式返回）
         Flux<String> contentFlux = appService.chatToGenCode(appId, message, loginUser);
         return contentFlux
@@ -87,10 +92,12 @@ public class AppController {
     }
 
     @PostMapping("/chat/gen/task")
+    @RateLimit(limitType = RateLimitType.USER, rate = 5, rateInterval = 60, message = "AI 生成请求过于频繁，请稍后再试")
     public BaseResponse<GenerationTask> startGenerationTask(@RequestBody GenerationTaskCreateRequest requestBody,
                                                             HttpServletRequest request) {
         ThrowUtils.throwIf(requestBody == null, ErrorCode.PARAMS_ERROR);
         User loginUser = InnerUserService.getLoginUser(request);
+        demoAccountQuotaService.checkAndConsume(loginUser);
         GenerationTask task = generationTaskService.startGenerationTask(
                 requestBody.getAppId(),
                 requestBody.getMessage(),
