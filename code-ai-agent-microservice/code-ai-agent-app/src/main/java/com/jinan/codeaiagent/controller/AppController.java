@@ -97,7 +97,6 @@ public class AppController {
                                                             HttpServletRequest request) {
         ThrowUtils.throwIf(requestBody == null, ErrorCode.PARAMS_ERROR);
         User loginUser = InnerUserService.getLoginUser(request);
-        demoAccountQuotaService.checkAndConsume(loginUser);
         GenerationTask task = generationTaskService.startGenerationTask(
                 requestBody.getAppId(),
                 requestBody.getMessage(),
