@@ -15,6 +15,7 @@ import com.jinan.codeaiagent.model.entity.User;
 import com.jinan.codeaiagent.model.enums.CodeGenTypeEnum;
 import com.jinan.codeaiagent.model.enums.GenerationTaskStatusEnum;
 import com.jinan.codeaiagent.service.AppService;
+import com.jinan.codeaiagent.service.DemoAccountQuotaService;
 import com.jinan.codeaiagent.service.GenerationTaskService;
 import com.mybatisflex.core.query.QueryWrapper;
 import com.mybatisflex.spring.service.impl.ServiceImpl;
@@ -57,6 +58,9 @@ public class GenerationTaskServiceImpl extends ServiceImpl<GenerationTaskMapper,
     @Resource
     private GenerationTaskMetrics generationTaskMetrics;
 
+    @Resource
+    private DemoAccountQuotaService demoAccountQuotaService;
+
     /** 只为当前进程实际接收的任务续租，其他实例的任务由其所属实例续租。 */
     private final Set<Long> locallyOwnedTaskIds = ConcurrentHashMap.newKeySet();
 
@@ -68,6 +72,14 @@ public class GenerationTaskServiceImpl extends ServiceImpl<GenerationTaskMapper,
         App app = appService.getById(appId);
         ThrowUtils.throwIf(app == null, ErrorCode.NOT_FOUND_ERROR, "应用不存在");
         ThrowUtils.throwIf(!app.getUserId().equals(loginUser.getId()), ErrorCode.NO_AUTH_ERROR, "无权限访问该应用");
+
+        // 刷新页面自动恢复会重复提交，已有活动任务时直接复用，不消耗演示账号额度
+        GenerationTask activeTask = generationTaskMapper.selectActiveByAppId(appId);
+        if (activeTask != null) {
+            checkTaskAuth(activeTask, loginUser);
+            return activeTask;
+        }
+        demoAccountQuotaService.checkAndConsume(loginUser);
 
         GenerationTask task = GenerationTask.builder()
                 .appId(appId)
